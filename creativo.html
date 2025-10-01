@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Creativo - Química</title>
+    <link rel="stylesheet" href="css/diseño.css">
+</head>
+<body>
+    <header>
+        <button onclick="window.location.href='index.html'">Inicio</button>
+        <button id="toggle-sidebar">Elementos</button>
+    </header>
+    <main>
+        <div id="center-area" class="drop-zone">
+            <div id="viewport">
+                <div id="world">
+                    <svg id="lines-svg" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;"></svg>
+                </div>
+            </div>
+        </div>
+        <aside id="sidebar">
+            <div class="elements-list">
+                <div class="element" data-element="H">H (Hidrógeno)</div>
+                <div class="element" data-element="C">C (Carbono)</div>
+                <div class="element" data-element="O">O (Oxígeno)</div>
+            </div>
+        </aside>
+    </main>
+    <div id="error-modal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <p id="error-message"></p>
+        </div>
+    </div>
+    <footer>
+        <div class="buttons">
+            <button>Limpiar</button>
+            <button id="validar" style="background-color: green; color: white;">Validar</button>
+        </div>
+        <div class="name-display">
+            <span id="element-name">Benceno</span>
+        </div>
+    </footer>
+    <script src="javascript/pantalla.js"></script>
+    <script src="javascript/constantes.js"></script>
+    <script src="javascript/enlaces.js"></script>
+    <script src="javascript/arrastrar.js"></script>
+    <script src="javascript/creacion.js"></script>
+    <script src="javascript/nomenclatura.js"></script>
+    <script src="javascript/mobile.js"></script>
+</body>
+</html>
