@@ -87,7 +87,7 @@ function updateLines() {
             const perpX = -uy;
             const perpY = ux;
             let offset = 3;
-            if (conn.type === 'double' || conn.type === 'triple') offset = 5;
+            if (conn.type === 'double' || conn.type === 'triple') offset = 8;
 
             let linesToDraw = [];
             if (conn.type === 'single') {

@@ -29,6 +29,195 @@ const substituentNames = {
     10: 'decil'
 };
 
+const enylNames = {
+    1: 'etenil',
+    2: 'propenil',
+    3: 'butilenil',
+    4: 'pentenil',
+    5: 'hexenil',
+    6: 'heptenil',
+    7: 'octenil',
+    8: 'nonenil'
+};
+
+const inylNames = {
+    1: 'etinil',
+    2: 'propinil',
+    3: 'butilinil',
+    4: 'pentinil',
+    5: 'hexinil',
+    6: 'heptinil',
+    7: 'octinil',
+    8: 'noninil'
+};
+
+function buildAdj(carbons, connections) {
+    const n = Array.isArray(carbons) ? carbons.length : 0;
+    let maxIdx = -Infinity;
+    (connections || []).forEach(c => {
+        if (typeof c.i === 'number' && typeof c.j === 'number') {
+            maxIdx = Math.max(maxIdx, c.i, c.j);
+        }
+    });
+    const offset = (maxIdx >= n && n > 0) ? 1 : 0;
+    const adjSets = Array.from({ length: n }, () => new Set());
+    const bondType = {};
+    (connections || []).forEach(c => {
+        if (typeof c.i !== 'number' || typeof c.j !== 'number') return;
+        const i = c.i - offset;
+        const j = c.j - offset;
+        if (i < 0 || j < 0 || i >= n || j >= n) return;
+        if (i === j) return;
+        adjSets[i].add(j);
+        adjSets[j].add(i);
+        const a = Math.min(i, j);
+        const b = Math.max(i, j);
+        bondType[`${a}-${b}`] = c.type || 'single';
+    });
+    const adj = adjSets.map(s => Array.from(s));
+    return { adj, bondType };
+}
+
+function findCycle(carbons, connections) {
+    const { adj } = buildAdj(carbons, connections);
+    const n = carbons.length;
+    const visited = new Array(n).fill(false);
+    const parent = new Array(n).fill(-1);
+    let cycle = [];
+
+    function dfs(u, p) {
+        visited[u] = true;
+        parent[u] = p;
+        for (const v of adj[u]) {
+            if (v === p) continue;
+            if (!visited[v]) {
+                if (dfs(v, u)) return true;
+            } else {
+                const path = [];
+                let cur = u;
+                while (cur !== -1) {
+                    path.push(cur);
+                    if (cur === v) break;
+                    cur = parent[cur];
+                }
+                if (path[path.length - 1] !== v) continue;
+                path.reverse();
+                if (path.length >= 3) {
+                    cycle = path;
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    for (let i = 0; i < n; i++) {
+        if (!visited[i]) {
+            if (dfs(i, -1)) return cycle;
+        }
+    }
+    return [];
+}
+
+function hasCycle(carbons, connections) {
+    return findCycle(carbons, connections).length > 0;
+}
+
+function findLongestChain(carbons, connections) {
+    const { adj, bondType } = buildAdj(carbons, connections);
+    const n = carbons.length;
+    if (n === 0) return [];
+    if (n === 1) return [0];
+    if (hasCycle(carbons, connections)) return findCycle(carbons, connections);
+
+    const degrees = adj.map(a => a.length);
+    const leaves = [];
+    for (let i = 0; i < n; i++) if (degrees[i] === 1) leaves.push(i);
+    if (leaves.length === 0) leaves.push(0);
+
+    let best = { path: [], unsat: 0, len: 0 };
+
+    function edgeUnsat(u, v) {
+        const a = Math.min(u, v);
+        const b = Math.max(u, v);
+        const t = bondType[`${a}-${b}`] || 'single';
+        return (t === 'double' || t === 'triple' || t === 2 || t === 3) ? 1 : 0;
+    }
+
+    function dfs(u, visited, path, unsatCount) {
+        visited[u] = true;
+        path.push(u);
+        if (unsatCount > best.unsat || (unsatCount === best.unsat && path.length > best.len)) {
+            best = { path: [...path], unsat: unsatCount, len: path.length };
+        }
+        for (const v of adj[u]) {
+            if (!visited[v]) {
+                const add = edgeUnsat(u, v);
+                dfs(v, visited, path, unsatCount + add);
+            }
+        }
+        path.pop();
+        visited[u] = false;
+    }
+
+    for (const leaf of leaves) dfs(leaf, new Array(n).fill(false), [], 0);
+    return best.path;
+}
+
+function findSubstituents(carbons, connections, mainChain) {
+    const { adj, bondType } = buildAdj(carbons, connections);
+    const mainSet = new Set(mainChain);
+    const substituents = [];
+
+    for (const mainNode of mainChain) {
+        for (const neigh of adj[mainNode]) {
+            if (mainSet.has(neigh)) continue;
+            const branchNodes = [];
+            const visited = new Set();
+            function dfsBranch(node, parent) {
+                visited.add(node);
+                branchNodes.push(node);
+                for (const nb of adj[node]) {
+                    if (nb === parent) continue;
+                    if (mainSet.has(nb)) continue;
+                    if (!visited.has(nb)) dfsBranch(nb, node);
+                }
+            }
+            dfsBranch(neigh, mainNode);
+
+            const a = Math.min(mainNode, neigh);
+            const b = Math.max(mainNode, neigh);
+            const linkType = bondType[`${a}-${b}`] || 'single';
+
+            substituents.push({
+                position: mainChain.indexOf(mainNode) + 1,
+                carbons: branchNodes.sort((a,b)=>a-b),
+                size: branchNodes.length,
+                linkType
+            });
+        }
+    }
+    return substituents;
+}
+
+function getSubstituentName(carbons, connections, parentConnectionType) {
+    if (!carbons || carbons.length === 0) return '';
+    const { bondType } = buildAdj(carbons, connections);
+    let hasDouble = false, hasTriple = false;
+    connections.forEach(c => {
+        if (carbons.includes(c.i) && carbons.includes(c.j)) {
+            if (c.type === 'double') hasDouble = true;
+            if (c.type === 'triple') hasTriple = true;
+        }
+    });
+    if (parentConnectionType === 'double') hasDouble = true;
+    if (parentConnectionType === 'triple') hasTriple = true;
+    const size = carbons.length;
+    if (hasTriple) return inylNames[size] || 'etinil';
+    if (hasDouble) return enylNames[size] || 'etenil';
+    return substituentNames[size] || `${size}il`;
+}
+
 function getSuffix(carbons, connections, mainChain) {
     let hasDouble = false;
     let hasTriple = false;
@@ -43,201 +232,174 @@ function getSuffix(carbons, connections, mainChain) {
     return 'ano';
 }
 
-function getSubstituentName(carbons, connections) {
-    if (carbons.length === 0) return '';
-    const mainChain = findLongestChainFromStart(carbons, connections, 0);
-    if (mainChain.length === 0) return '';
-    const subSubs = findSubstituents(carbons, connections, mainChain);
-    subSubs.sort((a, b) => a.position - b.position);
-    
-    const grouped = {};
-    subSubs.forEach(s => {
-        const subName = getSubstituentName(s.carbons, s.connections);
-        if (!grouped[subName]) grouped[subName] = [];
-        grouped[subName].push(s.position);
-    });
-    
-    const subParts = [];
-    for (const [name, positions] of Object.entries(grouped)) {
-        positions.sort((a, b) => a - b);
-        let prefix = '';
-        if (positions.length === 2) prefix = 'di';
-        else if (positions.length === 3) prefix = 'tri';
-        const posStr = positions.join(',');
-        subParts.push(`${posStr}-${prefix}${name}`);
+function getAlkaneName(carbons, connections) {
+    if (!isSimpleChain(carbons, connections)) return null;
+    const backbone = findLongestChain(carbons, connections);
+    const count = backbone.length;
+    return alkaneNames[count] || `${count}ano`;
+}
+
+function getBranchedAlkaneName(carbons, connections) {
+    if (!Array.isArray(carbons) || !Array.isArray(connections) || carbons.length === 0) return null;
+    if (!isConnected(carbons, connections)) return null;
+
+    const cycle = findCycle(carbons, connections);
+    const cycleSize = cycle.length;
+
+    if (cycleSize > 0 && cycleSize === carbons.length) {
+        const suffix = getCycleSuffix(carbons, connections);
+        const mainName = alkaneNames[cycleSize] ? alkaneNames[cycleSize].replace('ano', suffix) : `${cycleSize}${suffix}`;
+        return `ciclo${mainName}`;
+    } else if (cycleSize > 0 && cycleSize < carbons.length) {
+        const cycleSet = new Set(cycle);
+        const subs = [];
+        const { adj } = buildAdj(carbons, connections);
+        for (let i = 0; i < cycle.length; i++) {
+            const node = cycle[i];
+            for (const neigh of adj[node]) {
+                if (cycleSet.has(neigh)) continue;
+                const branchNodes = [];
+                (function dfsBranch(u, parent) {
+                    branchNodes.push(u);
+                    for (const v of adj[u]) {
+                        if (v === parent) continue;
+                        if (cycleSet.has(v)) continue;
+                        if (!branchNodes.includes(v)) dfsBranch(v, u);
+                    }
+                })(neigh, node);
+                subs.push({ position: i + 1, carbons: branchNodes });
+            }
+        }
+        const grouped = {};
+        subs.forEach(s => {
+            const name = getSubstituentName(s.carbons, connections);
+            if (!grouped[name]) grouped[name] = [];
+            grouped[name].push(s.position);
+        });
+        const parts = [];
+        for (const [name, positions] of Object.entries(grouped)) {
+            positions.sort((a,b)=>a-b);
+            let prefix = '';
+            if (positions.length === 2) prefix = 'di';
+            else if (positions.length === 3) prefix = 'tri';
+            else if (positions.length === 4) prefix = 'tetra';
+            parts.push(`${positions.join(',')}-${prefix}${name}`);
+        }
+        const suffix = getCycleSuffix(carbons, connections);
+        const mainName = alkaneNames[cycleSize] ? alkaneNames[cycleSize].replace('ano', suffix) : `${cycleSize}${suffix}`;
+        return parts.length ? `${parts.join(' ')} ciclo${mainName}` : `ciclo${mainName}`;
+    } else {
+        const mainChain = findLongestChain(carbons, connections);
+        if (mainChain.length === 0) return null;
+        const substituents = findSubstituents(carbons, connections, mainChain);
+        substituents.sort((a,b)=>a.position - b.position);
+        const grouped = {};
+        substituents.forEach(s => {
+            const name = getSubstituentName(s.carbons, connections, s.linkType);
+            if (!grouped[name]) grouped[name] = [];
+            grouped[name].push(s.position);
+        });
+        const parts = [];
+        for (const [name, positions] of Object.entries(grouped)) {
+            positions.sort((a,b)=>a-b);
+            let prefix = '';
+            if (positions.length === 2) prefix = 'di';
+            else if (positions.length === 3) prefix = 'tri';
+            else if (positions.length === 4) prefix = 'tetra';
+            parts.push(`${positions.join(',')}-${prefix}${name}`);
+        }
+        const substituentStr = parts.join(' ');
+        const suffix = getSuffix(carbons, connections, mainChain);
+        const mainName = alkaneNames[mainChain.length] ? alkaneNames[mainChain.length].replace('ano', suffix) : `${mainChain.length}${suffix}`;
+        return substituentStr ? `${substituentStr} ${mainName}` : mainName;
     }
-    
-    const subStr = subParts.join(' ');
-    const baseName = substituentNames[mainChain.length] || mainChain.length + 'il';
-    const fullName = baseName;
-    const result = subStr ? `${subStr} ${fullName}` : fullName;
-    return subSubs.length > 0 ? `(${result})` : result;
 }
 
-function buildAdj(carbons, connections) {
-    const adj = carbons.map(() => []);
-    connections.forEach(c => {
-        adj[c.i].push(c.j);
-        adj[c.j].push(c.i);
-    });
-    return adj;
-}
-
-function isSimpleChain(carbons, connections) {
-    if (carbons.length === 0) return false;
-    if (carbons.length > 15) return false;
-    const adj = buildAdj(carbons, connections);
+function isConnected(carbons, connections) {
+    if (!Array.isArray(carbons) || !Array.isArray(connections)) return false;
+    if (carbons.length === 0) return true;
+    const { adj } = buildAdj(carbons, connections);
+    if (adj.length === 0) return false;
     const visited = new Set();
     function dfs(node) {
         visited.add(node);
-        adj[node].forEach(neigh => {
+        (adj[node] || []).forEach(neigh => {
             if (!visited.has(neigh)) dfs(neigh);
         });
     }
     dfs(0);
-    if (visited.size !== carbons.length) return false;
-    if (connections.length !== carbons.length - 1) return false;
-    let deg1 = 0;
-    for (let i = 0; i < adj.length; i++) {
-        const deg = adj[i].length;
-        if (deg === 1) deg1++;
-        else if (deg !== 2 && !(carbons.length === 1 && deg === 0)) return false;
-    }
-    if (carbons.length === 1) return deg1 === 0;
-    return deg1 === 2;
+    return visited.size === carbons.length;
 }
 
-function getAlkaneName(carbons, connections) {
-    if (!isSimpleChain(carbons, connections)) return null;
-    const count = carbons.length;
-    return alkaneNames[count] || `${count}ano`;
-}
-
-function findLongestChain(carbons, connections) {
-    if (carbons.length === 1) return [0];
-    const adj = buildAdj(carbons, connections);
-    const ends = [];
-    for (let i = 0; i < adj.length; i++) {
-        if (adj[i].length === 1) ends.push(i);
-    }
-    let longestPaths = [];
-    let maxLength = 0;
-    function dfs(path, visited) {
-        const last = path[path.length - 1];
-        if (path.length > maxLength) {
-            maxLength = path.length;
-            longestPaths = [[...path]];
-        } else if (path.length === maxLength) {
-            longestPaths.push([...path]);
-        }
-        for (const neigh of adj[last]) {
-            if (!visited.has(neigh)) {
-                visited.add(neigh);
-                path.push(neigh);
-                dfs(path, visited);
-                path.pop();
-                visited.delete(neigh);
-            }
-        }
-    }
-    for (const start of ends) {
-        dfs([start], new Set([start]));
-    }
-    let bestChain = longestPaths[0];
-    let bestPositions = [];
-    for (const chain of longestPaths) {
-        const subs = findSubstituents(carbons, connections, chain);
-        const positions = subs.map(s => s.position).sort((a, b) => a - b);
-        if (positions.length < bestPositions.length || (positions.length === bestPositions.length && JSON.stringify(positions) < JSON.stringify(bestPositions))) {
-            bestChain = chain;
-            bestPositions = positions;
-        }
-    }
-    return bestChain;
-}
-
-function findLongestChainFromStart(carbons, connections, start) {
-    if (carbons.length === 1) return [0];
-    const adj = buildAdj(carbons, connections);
-    let longestPath = [];
-    function dfs(path, visited) {
-        if (path.length > longestPath.length) {
-            longestPath = [...path];
-        }
-        const last = path[path.length - 1];
-        for (const neigh of adj[last]) {
-            if (!visited.has(neigh)) {
-                visited.add(neigh);
-                path.push(neigh);
-                dfs(path, visited);
-                path.pop();
-                visited.delete(neigh);
-            }
-        }
-    }
-    dfs([start], new Set([start]));
-    return longestPath;
-}
-
-function findSubstituents(carbons, connections, mainChain) {
-    const adj = buildAdj(carbons, connections);
-    const mainSet = new Set(mainChain);
-    const substituents = [];
-    for (const mainNode of mainChain) {
-        for (const neigh of adj[mainNode]) {
-            if (!mainSet.has(neigh)) {
-                const branchCarbons = [];
-                const branchConnections = [];
-                const visited = new Set();
-                function dfsBranch(node) {
-                    visited.add(node);
-                    branchCarbons.push(node);
-                    for (const n of adj[node]) {
-                        if (!visited.has(n) && !mainSet.has(n)) {
-                            branchConnections.push({i: branchCarbons.indexOf(node), j: branchCarbons.length});
-                            dfsBranch(n);
-                        }
-                    }
-                }
-                dfsBranch(neigh);
-                substituents.push({
-                    position: mainChain.indexOf(mainNode) + 1,
-                    carbons: branchCarbons,
-                    connections: branchConnections
-                });
-            }
-        }
-    }
-    return substituents;
-}
-
-function getBranchedAlkaneName(carbons, connections) {
-    if (carbons.length === 0) return null;
-    const mainChain = findLongestChain(carbons, connections);
-    if (mainChain.length === 0) return null;
-    const substituents = findSubstituents(carbons, connections, mainChain);
-    substituents.sort((a, b) => a.position - b.position);
-    
-    const grouped = {};
-    substituents.forEach(s => {
-        const name = getSubstituentName(s.carbons, s.connections);
-        if (!grouped[name]) grouped[name] = [];
-        grouped[name].push(s.position);
+function getCycleSuffix(carbons, connections) {
+    let hasDouble = false;
+    let hasTriple = false;
+    connections.forEach(c => {
+        if (c.type === 'double') hasDouble = true;
+        if (c.type === 'triple') hasTriple = true;
     });
-    
-    const substituentParts = [];
-    for (const [name, positions] of Object.entries(grouped)) {
-        positions.sort((a, b) => a - b);
-        let prefix = '';
-        if (positions.length === 2) prefix = 'di';
-        else if (positions.length === 3) prefix = 'tri';
-        else if (positions.length === 4) prefix = 'tetra';
-        const posStr = positions.join(',');
-        substituentParts.push(`${posStr}-${prefix}${name}`);
+    if (hasTriple) return 'ino';
+    if (hasDouble) return 'eno';
+    return 'ano';
+}
+
+function isSimpleChain(carbons, connections, maxBranchLength = 2) {
+    if (carbons.length === 0) return false;
+    if (carbons.length > 100) return false;
+    const { adj } = buildAdj(carbons, connections);
+    const backbone = findLongestChain(carbons, connections);
+    if (backbone.length === 0) return false;
+    const backboneSet = new Set(backbone);
+
+    for (let i = 0; i < carbons.length; i++) {
+        if (backboneSet.has(i)) continue;
+        let backboneNeighbors = 0;
+        for (const nb of adj[i]) if (backboneSet.has(nb)) backboneNeighbors++;
+        if (backboneNeighbors !== 1) return false;
     }
-    
-    const substituentStr = substituentParts.join(' ');
-    const suffix = getSuffix(carbons, connections, mainChain);
-    const mainName = alkaneNames[mainChain.length] ? alkaneNames[mainChain.length].replace('ano', suffix) : `${mainChain.length}${suffix}`;
-    return substituentStr ? `${substituentStr} ${mainName}` : mainName;
+
+    const subs = findSubstituents(carbons, connections, backbone);
+    for (const s of subs) if (s.size > maxBranchLength) return false;
+
+    for (const node of backbone) {
+        const count = adj[node].filter(x => backboneSet.has(x)).length;
+        if (backbone.length === 1) {
+            if (count !== 0) return false;
+        } else if (node === backbone[0] || node === backbone[backbone.length - 1]) {
+            if (count !== 1) return false;
+        } else {
+            if (count !== 2) return false;
+        }
+    }
+
+    return true;
+}
+
+function calculateHydrogens(carbons, connections) {
+    const { adj, bondType } = buildAdj(carbons, connections);
+    return carbons.map((_, i) => {
+        let valence = 0;
+        for (const j of adj[i]) {
+            const key = `${Math.min(i,j)}-${Math.max(i,j)}`;
+            const t = bondType[key] || 'single';
+            let order = 1;
+            if (t === 'double' || t === 2 || t === '2') order = 2;
+            else if (t === 'triple' || t === 3 || t === '3') order = 3;
+            valence += order;
+        }
+        return Math.max(0, 4 - valence);
+    });
+}
+
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+        getBranchedAlkaneName,
+        getAlkaneName,
+        isSimpleChain,
+        findCycle,
+        findSubstituents,
+        buildAdj,
+        calculateHydrogens
+    };
 }

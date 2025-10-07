@@ -45,6 +45,23 @@ elements.forEach(element => {
                     const index = carbons.indexOf(newElement);
                     if (index > -1) {
                         carbons.splice(index, 1);
+                        // Remove attached hydrogens
+                        const attachedHAttachments = hydrogenAttachments.filter(a => a.cIndex === index);
+                        const attachedHIndices = attachedHAttachments.map(a => a.hIndex).sort((a,b) => b - a);
+                        attachedHIndices.forEach(hIdx => {
+                            const hEl = hidrogenos[hIdx];
+                            hidrogenos.splice(hIdx, 1);
+                            world.removeChild(hEl);
+                            hydrogenAttachments = hydrogenAttachments.filter(a => a.hIndex !== hIdx);
+                            hydrogenAttachments.forEach(a => {
+                                if (a.hIndex > hIdx) a.hIndex--;
+                            });
+                        });
+                        // Adjust cIndex for remaining attachments
+                        hydrogenAttachments = hydrogenAttachments.filter(a => a.cIndex !== index);
+                        hydrogenAttachments.forEach(a => {
+                            if (a.cIndex > index) a.cIndex--;
+                        });
                         connections = connections.filter(c => c.i !== index && c.j !== index);
                         connections.forEach(c => {
                             if (c.i > index) c.i--;
@@ -70,6 +87,23 @@ elements.forEach(element => {
                     const index = carbons.indexOf(newElement);
                     if (index > -1) {
                         carbons.splice(index, 1);
+                        // Remove attached hydrogens
+                        const attachedHAttachments = hydrogenAttachments.filter(a => a.cIndex === index);
+                        const attachedHIndices = attachedHAttachments.map(a => a.hIndex).sort((a,b) => b - a);
+                        attachedHIndices.forEach(hIdx => {
+                            const hEl = hidrogenos[hIdx];
+                            hidrogenos.splice(hIdx, 1);
+                            world.removeChild(hEl);
+                            hydrogenAttachments = hydrogenAttachments.filter(a => a.hIndex !== hIdx);
+                            hydrogenAttachments.forEach(a => {
+                                if (a.hIndex > hIdx) a.hIndex--;
+                            });
+                        });
+                        // Adjust cIndex for remaining attachments
+                        hydrogenAttachments = hydrogenAttachments.filter(a => a.cIndex !== index);
+                        hydrogenAttachments.forEach(a => {
+                            if (a.cIndex > index) a.cIndex--;
+                        });
                         connections = connections.filter(c => c.i !== index && c.j !== index);
                         connections.forEach(c => {
                             if (c.i > index) c.i--;
