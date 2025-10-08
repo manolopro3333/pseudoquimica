@@ -52,8 +52,8 @@ const inylNames = {
 };
 
 function detectSubstituentFunctionalGroup(atoms, connections) {
-    const sorted = atoms.slice().sort();
-    const key = sorted.join(' ');
+    const sorted = atoms.slice().sort((a, b) => a.type.localeCompare(b.type));
+    const key = sorted.map(a => a.type).join(' ');
     const functionalMap = {
         'H O': 'hidroxi',
         'H S': 'sulfhidrilo',
@@ -139,7 +139,7 @@ function hasCycle(carbons, connections) {
     return findCycle(carbons, connections).length > 0;
 }
 
-function findLongestChain(carbons, connections) {
+function findLongestChain(carbons, connections, start = null) {
     const { adj, bondType } = buildAdj(carbons, connections);
     const n = carbons.length;
     if (n === 0) return [];
@@ -148,8 +148,12 @@ function findLongestChain(carbons, connections) {
 
     const degrees = adj.map(a => a.length);
     const leaves = [];
-    for (let i = 0; i < n; i++) if (degrees[i] === 1) leaves.push(i);
-    if (leaves.length === 0) leaves.push(0);
+    if (start !== null) {
+        leaves.push(start);
+    } else {
+        for (let i = 0; i < n; i++) if (degrees[i] === 1) leaves.push(i);
+        if (leaves.length === 0) leaves.push(0);
+    }
 
     let best = { path: [], unsat: 0, len: 0 };
 
@@ -256,7 +260,7 @@ function getAlkaneName(carbons, connections) {
     return alkaneNames[count] || `${count}ano`;
 }
 
-function getBranchedAlkaneName(carbons, connections) {
+function getBranchedAlkaneName(atoms, carbons, connections, carbonIndices, mainChain = null) {
     if (!Array.isArray(carbons) || !Array.isArray(connections) || carbons.length === 0) return null;
     if (!isConnected(carbons, connections)) return null;
 
@@ -306,28 +310,60 @@ function getBranchedAlkaneName(carbons, connections) {
         const mainName = alkaneNames[cycleSize] ? alkaneNames[cycleSize].replace('ano', suffix) : `${cycleSize}${suffix}`;
         return parts.length ? `${parts.join(' ')} ciclo${mainName}` : `ciclo${mainName}`;
     } else {
-        const mainChain = findLongestChain(carbons, connections);
+        if (!mainChain) mainChain = findLongestChain(carbons, connections);
         if (mainChain.length === 0) return null;
-        const substituents = findSubstituents(carbons, connections, mainChain);
-        substituents.sort((a,b)=>a.position - b.position);
-        const grouped = {};
-        substituents.forEach(s => {
-            const name = getSubstituentName(s.carbons, carbons, connections, s.linkType);
-            if (!grouped[name]) grouped[name] = [];
-            grouped[name].push(s.position);
-        });
-        const parts = [];
-        for (const [name, positions] of Object.entries(grouped)) {
-            positions.sort((a,b)=>a-b);
-            let prefix = '';
-            if (positions.length === 2) prefix = 'di';
-            else if (positions.length === 3) prefix = 'tri';
-            else if (positions.length === 4) prefix = 'tetra';
-            parts.push(`${positions.join(',')}-${prefix}${name}`);
+        const substituents = [];
+        const { adj } = buildAdj(atoms, connections);
+        for (const mainIdx of mainChain) {
+            const actualMainIdx = carbonIndices[mainIdx];
+            for (const neigh of adj[actualMainIdx]) {
+                if (atoms[neigh].type === 'C') continue;
+                const branchNodes = [];
+                const visited = new Set();
+                function dfsBranch(node, parent) {
+                    visited.add(node);
+                    branchNodes.push(node);
+                    for (const nb of adj[node]) {
+                        if (nb === parent) continue;
+                        if (atoms[nb].type === 'C' && carbonIndices.includes(nb)) continue;
+                        if (!visited.has(nb)) dfsBranch(nb, node);
+                    }
+                }
+                dfsBranch(neigh, actualMainIdx);
+                const branchAtoms = branchNodes.map(i => atoms[i]);
+                const branchConnections = connections.filter(c => branchNodes.includes(c.i) && branchNodes.includes(c.j));
+                const functional = detectSubstituentFunctionalGroup(branchAtoms, branchConnections);
+                if (functional) {
+                    substituents.push({
+                        position: mainIdx + 1,
+                        name: functional,
+                        linkType: connections.find(c => (c.i === actualMainIdx && c.j === neigh) || (c.i === neigh && c.j === actualMainIdx))?.type || 'single'
+                    });
+                }
+            }
         }
-        const substituentStr = parts.join(' ');
+        const substituentStr = substituents.map(s => `${s.position}-${s.name}`).join(' ');
         const suffix = getSuffix(carbons, connections, mainChain);
-        const mainName = alkaneNames[mainChain.length] ? alkaneNames[mainChain.length].replace('ano', suffix) : `${mainChain.length}${suffix}`;
+        let mainName = alkaneNames[mainChain.length] ? alkaneNames[mainChain.length].replace('ano', suffix) : `${mainChain.length}${suffix}`;
+        if (suffix === 'eno' || suffix === 'ino') {
+            const unsatPositions = [];
+            connections.forEach(c => {
+                if ((suffix === 'eno' && c.type === 'double') || (suffix === 'ino' && c.type === 'triple')) {
+                    const iIdx = mainChain.indexOf(c.i);
+                    const jIdx = mainChain.indexOf(c.j);
+                    if (iIdx !== -1 && jIdx !== -1) {
+                        const pos = Math.min(iIdx, jIdx) + 1;
+                        unsatPositions.push(pos);
+                    }
+                }
+            });
+            unsatPositions.sort((a, b) => a - b);
+            if (unsatPositions.length > 0) {
+                const posStr = unsatPositions.join(',');
+                const suffixLetter = suffix === 'eno' ? 'en' : 'in';
+                mainName = mainName.replace(suffix, `-${posStr}-${suffixLetter}o`);
+            }
+        }
         return substituentStr ? `${substituentStr} ${mainName}` : mainName;
     }
 }
@@ -417,6 +453,7 @@ if (typeof module !== 'undefined' && module.exports) {
         findCycle,
         findSubstituents,
         buildAdj,
-        calculateHydrogens
+        calculateHydrogens,
+        findLongestChain
     };
 }

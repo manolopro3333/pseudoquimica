@@ -23,7 +23,7 @@ const elementos = {
     S: {
         simbolo: 'S',
         nombre: 'Azufre',
-        valencia: 2,
+        valencia: 6,
         color: '#ffff00',
         radio: ELEMENT_SIZE
     },

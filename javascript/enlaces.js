@@ -232,7 +232,16 @@ function countCarbonBonds(carbonIndex) {
         if (c.type === 'single') return sum + 1;
         if (c.type === 'double') return sum + 2;
         if (c.type === 'triple') return sum + 3;
-        return sum + 1; 
+        return sum + 1;
+    }, 0);
+}
+
+function countBonds(index) {
+    return connections.filter(c => c.i === index || c.j === index).reduce((sum, c) => {
+        if (c.type === 'single') return sum + 1;
+        if (c.type === 'double') return sum + 2;
+        if (c.type === 'triple') return sum + 3;
+        return sum + 1;
     }, 0);
 }
 
@@ -424,6 +433,14 @@ function validateAndAdjustHydrogens() {
         }
     }
 
+    // Check valence for non-carbon atoms
+    for (let i = 0; i < atoms.length; i++) {
+        const bonds = countBonds(i);
+        const valencia = getValencia(atoms[i].type);
+        if (bonds > valencia) {
+            valid = false;
+        }
+    }
 
     const uniqueConnections = [];
     connections.forEach(c => {
