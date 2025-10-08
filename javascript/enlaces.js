@@ -1,10 +1,23 @@
-let carbons = []; 
+let atoms = []; 
 let connections = [];
 let hidrogenos = [];
 let hydrogenAttachments = [];
+let creatingConnection = false;
 
 function getPrioritizedAngles() {
     return [0, Math.PI, Math.PI / 4, 3 * Math.PI / 4, 5 * Math.PI / 4, 7 * Math.PI / 4, Math.PI / 2, 3 * Math.PI / 2, Math.PI / 3, 2 * Math.PI / 3, 4 * Math.PI / 3, 5 * Math.PI / 3];
+}
+
+
+function tryCreateConnection(i, j) {
+    if (creatingConnection) return;
+    creatingConnection = true;
+    try {
+        addConnection(i, j);
+    } finally {
+        // retardo corto para proteger contra eventos repetidos inmediatos
+        setTimeout(() => creatingConnection = false, 50);
+    }
 }
 
 function findClosestTarget(currentX, currentY) {
@@ -12,17 +25,17 @@ function findClosestTarget(currentX, currentY) {
     let closestTargetDist = Infinity;
     let targetX = null;
     let targetY = null;
-    for (let k = 0; k < carbons.length; k++) {
+    for (let k = 0; k < atoms.length; k++) {
         if (k === draggedIndex) continue;
-        const otherCenter = getCenter(carbons[k]);
+        const otherCenter = getCenter(atoms[k].element);
         const angles = getPrioritizedAngles();
         for (let angle of angles) {
             const tx = otherCenter.x + BOND_LENGTH * Math.cos(angle);
             const ty = otherCenter.y + BOND_LENGTH * Math.sin(angle);
             let isFree = true;
-            for (let m = 0; m < carbons.length; m++) {
+            for (let m = 0; m < atoms.length; m++) {
                 if (m === draggedIndex || m === k) continue;
-                const oc = getCenter(carbons[m]);
+                const oc = getCenter(atoms[m].element);
                 const d = Math.sqrt((tx - oc.x)**2 + (ty - oc.y)**2);
                 if (d < BOND_LENGTH - 10) {
                     isFree = false;
@@ -51,15 +64,23 @@ function isConnected(i, j) {
 function addConnection(i, j) {
     const min = Math.min(i, j);
     const max = Math.max(i, j);
-    if (!isConnected(min, max)) {
-        connections.push({i: min, j: max, type: 'single'});
-    }
+    // si ya existe, no agregues otra
+    const existing = connections.find(c => c.i === min && c.j === max);
+    if (existing) return existing;
+    const newConn = { i: min, j: max, type: 'single' };
+    connections.push(newConn);
+    normalizeConnections(); // opcional, por seguridad
+    updateLines();
+    return newConn;
 }
+
 
 function removeConnection(i, j) {
     const min = Math.min(i, j);
     const max = Math.max(i, j);
     connections = connections.filter(c => !(c.i === min && c.j === max));
+    normalizeConnections();
+    updateLines();
 }
 
 function detectCrossing(conn1, conn2) {
@@ -67,6 +88,7 @@ function detectCrossing(conn1, conn2) {
 }
 
 function updateLines() {
+    normalizeConnections();
     linesSvg.innerHTML = '';
     const existingToggle = document.querySelector('.bond-toggle');
     if (existingToggle) {
@@ -74,8 +96,9 @@ function updateLines() {
     }
     for (let conn of connections) {
         const i = conn.i, j = conn.j;
-        const el1 = carbons[i];
-        const el2 = carbons[j];
+        if (i < 0 || i >= atoms.length || j < 0 || j >= atoms.length) continue;
+        const el1 = atoms[i].element;
+        const el2 = atoms[j].element;
         if (el1 && el2) {
             const center1 = getCenter(el1);
             const center2 = getCenter(el2);
@@ -165,8 +188,9 @@ function updateLines() {
     }
 
     for (let att of hydrogenAttachments) {
+        if (att.hIndex < 0 || att.hIndex >= hidrogenos.length || att.cIndex < 0 || att.cIndex >= atoms.length) continue;
         const hEl = hidrogenos[att.hIndex];
-        const cEl = carbons[att.cIndex];
+        const cEl = atoms[att.cIndex].element;
         if (hEl && cEl) {
             const hCenter = getCenter(hEl);
             const cCenter = getCenter(cEl);
@@ -182,6 +206,26 @@ function updateLines() {
         }
     }
 }
+
+function connectionRank(type) {
+    if (type === 'single') return 1;
+    if (type === 'double') return 2;
+    if (type === 'triple') return 3;
+    return 1;
+}
+
+function normalizeConnections() {
+    const map = new Map();
+    for (const c of connections) {
+        const key = `${c.i}-${c.j}`;
+        const rank = connectionRank(c.type);
+        if (!map.has(key) || rank > map.get(key).rank) {
+            map.set(key, { i: c.i, j: c.j, type: c.type, rank });
+        }
+    }
+    connections = Array.from(map.values()).map(o => ({ i: o.i, j: o.j, type: o.type }));
+}
+
 
 function countCarbonBonds(carbonIndex) {
     return connections.filter(c => c.i === carbonIndex || c.j === carbonIndex).reduce((sum, c) => {
@@ -212,14 +256,14 @@ function addHydrogenToCarbon(carbonIndex) {
     hEl.style.width = HYDROGEN_SIZE + 'px';
     hEl.style.height = HYDROGEN_SIZE + 'px';
 
-    const cCenter = getCenter(carbons[carbonIndex]);
+    const cCenter = getCenter(atoms[carbonIndex].element);
     const angles = [0, Math.PI / 2, Math.PI, 3 * Math.PI / 2];
     let placed = false;
     for (let angle of angles) {
         const hx = cCenter.x + HYDROGEN_BOND_LENGTH * Math.cos(angle);
         const hy = cCenter.y + HYDROGEN_BOND_LENGTH * Math.sin(angle);
         let free = true;
-        for (let other of carbons) {
+        for (let other of atoms.map(a => a.element)) {
             const oc = getCenter(other);
             if (Math.sqrt((hx - oc.x) ** 2 + (hy - oc.y) ** 2) < HYDROGEN_SIZE) free = false;
         }
@@ -273,7 +317,8 @@ function removeHydrogenFromCarbon(carbonIndex) {
 
 function validateAndAdjustHydrogens() {
     let valid = true;
-    for (let i = 0; i < carbons.length; i++) {
+    for (let i = 0; i < atoms.length; i++) {
+        if (atoms[i].type !== 'C') continue;
         const bonds = countCarbonBonds(i);
         const hs = countAttachedHydrogens(i);
         const total = bonds + hs;
@@ -306,7 +351,7 @@ function validateAndAdjustHydrogens() {
                     hEl.style.fontSize = '16px';
                     hEl.style.boxShadow = '0 0 5px rgba(0,0,0,0.3)';
 
-                    const cCenter = getCenter(carbons[i]);
+                    const cCenter = getCenter(atoms[i].element);
                     const offsetX = 40;
                     const offsetY = 0;
                     hEl.style.left = (cCenter.x + offsetX - HYDROGEN_SIZE / 2) + 'px';
@@ -351,7 +396,7 @@ function validateAndAdjustHydrogens() {
                 hEl.style.fontSize = '16px';
                 hEl.style.boxShadow = '0 0 5px rgba(0,0,0,0.3)';
 
-                const cCenter = getCenter(carbons[i]);
+                const cCenter = getCenter(atoms[i].element);
                 const offsetX = 40;
                 const offsetY = 0;
                 hEl.style.left = (cCenter.x + offsetX - HYDROGEN_SIZE / 2) + 'px';
@@ -378,6 +423,19 @@ function validateAndAdjustHydrogens() {
             }
         }
     }
+
+
+    const uniqueConnections = [];
+    connections.forEach(c => {
+        if (c.i >= 0 && c.j >= 0 && c.i < atoms.length && c.j < atoms.length) {
+            if (!uniqueConnections.some(u => (u.i === c.i && u.j === c.j) || (u.i === c.j && u.j === c.i))) {
+                uniqueConnections.push(c);
+            }
+        }
+    });
+    connections = uniqueConnections;
+
+
     updateLines();
     return valid;
 }

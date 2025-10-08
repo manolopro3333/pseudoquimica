@@ -51,6 +51,22 @@ const inylNames = {
     8: 'noninil'
 };
 
+function detectSubstituentFunctionalGroup(atoms, connections) {
+    const sorted = atoms.slice().sort();
+    const key = sorted.join(' ');
+    const functionalMap = {
+        'H O': 'hidroxi',
+        'H S': 'sulfhidrilo',
+        'I': 'yodo',
+        'N O O': 'nitro',
+        'H O O O S': 'sulfo',
+        'H O O S': 'sulfinilo',
+        'H O S': 'sulfenilo',
+        'O O S': 'sulfonilo'
+    };
+    return functionalMap[key];
+}
+
 function buildAdj(carbons, connections) {
     const n = Array.isArray(carbons) ? carbons.length : 0;
     let maxIdx = -Infinity;
@@ -200,19 +216,20 @@ function findSubstituents(carbons, connections, mainChain) {
     return substituents;
 }
 
-function getSubstituentName(carbons, connections, parentConnectionType) {
-    if (!carbons || carbons.length === 0) return '';
-    const { bondType } = buildAdj(carbons, connections);
+function getSubstituentName(branchIndices, fullAtoms, connections, parentConnectionType) {
+    if (!branchIndices || branchIndices.length === 0) return '';
+    const branchAtoms = branchIndices.map(i => fullAtoms[i]);
+    const branchConnections = connections.filter(c => branchIndices.includes(c.i) && branchIndices.includes(c.j));
+    const functional = detectSubstituentFunctionalGroup(branchAtoms, branchConnections);
+    if (functional) return functional;
     let hasDouble = false, hasTriple = false;
-    connections.forEach(c => {
-        if (carbons.includes(c.i) && carbons.includes(c.j)) {
-            if (c.type === 'double') hasDouble = true;
-            if (c.type === 'triple') hasTriple = true;
-        }
+    branchConnections.forEach(c => {
+        if (c.type === 'double') hasDouble = true;
+        if (c.type === 'triple') hasTriple = true;
     });
     if (parentConnectionType === 'double') hasDouble = true;
     if (parentConnectionType === 'triple') hasTriple = true;
-    const size = carbons.length;
+    const size = branchAtoms.length;
     if (hasTriple) return inylNames[size] || 'etinil';
     if (hasDouble) return enylNames[size] || 'etenil';
     return substituentNames[size] || `${size}il`;
@@ -272,7 +289,7 @@ function getBranchedAlkaneName(carbons, connections) {
         }
         const grouped = {};
         subs.forEach(s => {
-            const name = getSubstituentName(s.carbons, connections);
+            const name = getSubstituentName(s.carbons, carbons, connections);
             if (!grouped[name]) grouped[name] = [];
             grouped[name].push(s.position);
         });
@@ -295,7 +312,7 @@ function getBranchedAlkaneName(carbons, connections) {
         substituents.sort((a,b)=>a.position - b.position);
         const grouped = {};
         substituents.forEach(s => {
-            const name = getSubstituentName(s.carbons, connections, s.linkType);
+            const name = getSubstituentName(s.carbons, carbons, connections, s.linkType);
             if (!grouped[name]) grouped[name] = [];
             grouped[name].push(s.position);
         });

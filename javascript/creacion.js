@@ -28,23 +28,23 @@ elements.forEach(element => {
         newElement.style.height = size + 'px';
         world.appendChild(newElement);
 
-        if (elementType === 'C' && carbons.length >= MAX_CARBONS) {
+        if (elementType === 'C' && atoms.filter(a => a.type === 'C').length >= MAX_CARBONS) {
             return;
         }
 
         if (elementType === 'C') {
-            if (carbons.length === 0) {
+            if (atoms.length === 0) {
                 const centerX = (-panX + viewport.clientWidth / 2) / zoom;
                 const centerY = (-panY + viewport.clientHeight / 2) / zoom;
                 newElement.style.left = (centerX - size / 2) + 'px';
                 newElement.style.top = (centerY - size / 2) + 'px';
                 newElement.addEventListener('mousedown', startDrag);
                 newElement.addEventListener('touchstart', startDrag);
-                carbons.push(newElement);
+                atoms.push({type: 'C', element: newElement});
                 newElement.addEventListener('dblclick', function() {
-                    const index = carbons.indexOf(newElement);
+                    const index = atoms.findIndex(a => a.element === newElement);
                     if (index > -1) {
-                        carbons.splice(index, 1);
+                        atoms.splice(index, 1);
                         // Remove attached hydrogens
                         const attachedHAttachments = hydrogenAttachments.filter(a => a.cIndex === index);
                         const attachedHIndices = attachedHAttachments.map(a => a.hIndex).sort((a,b) => b - a);
@@ -82,11 +82,11 @@ elements.forEach(element => {
                 newElement.style.top = y + 'px';
                 newElement.addEventListener('mousedown', startDrag);
                 newElement.addEventListener('touchstart', startDrag);
-                carbons.push(newElement);
+                atoms.push({type: 'C', element: newElement});
                 newElement.addEventListener('dblclick', function() {
-                    const index = carbons.indexOf(newElement);
+                    const index = atoms.findIndex(a => a.element === newElement);
                     if (index > -1) {
-                        carbons.splice(index, 1);
+                        atoms.splice(index, 1);
                         // Remove attached hydrogens
                         const attachedHAttachments = hydrogenAttachments.filter(a => a.cIndex === index);
                         const attachedHIndices = attachedHAttachments.map(a => a.hIndex).sort((a,b) => b - a);
@@ -149,6 +149,20 @@ elements.forEach(element => {
             newElement.style.top = y + 'px';
             newElement.addEventListener('mousedown', startDrag);
             newElement.addEventListener('touchstart', startDrag);
+            atoms.push({type: elementType, element: newElement});
+            newElement.addEventListener('dblclick', function() {
+                const index = atoms.findIndex(a => a.element === newElement);
+                if (index > -1) {
+                    atoms.splice(index, 1);
+                    connections = connections.filter(c => c.i !== index && c.j !== index);
+                    connections.forEach(c => {
+                        if (c.i > index) c.i--;
+                        if (c.j > index) c.j--;
+                    });
+                    world.removeChild(newElement);
+                    updateLines();
+                }
+            });
         }
 
         updateLines();
@@ -163,10 +177,10 @@ elements.forEach(element => {
             showErrorModal('No es posible el elemento');
             return;
         }
-        const name = getBranchedAlkaneName(carbons, connections);
+        const name = getCompleteName(atoms, connections);
         if (name) {
             nameDisplay.textContent = name;
-            numberMainChainCarbons(carbons, connections);
+            numberMainChainCarbons(atoms, connections);
         } else {
             showErrorModal('No es una cadena simple');
         }
@@ -185,14 +199,28 @@ elements.forEach(element => {
 
         const allDragged = world.querySelectorAll('.dragged-element');
         allDragged.forEach(el => {
-            if (!carbons.includes(el)) {
+            if (!atoms.some(a => a.element === el)) {
                 world.removeChild(el);
             }
         });
 
+        const newAtoms = [];
+        const indexMap = new Map();
+        atoms.forEach((a, oldIndex) => {
+            const newIndex = newAtoms.length;
+            newAtoms.push(a);
+            indexMap.set(oldIndex, newIndex);
+        });
+        atoms = newAtoms;
+
+        connections = connections.filter(c => indexMap.has(c.i) && indexMap.has(c.j)).map(c => ({
+            i: indexMap.get(c.i),
+            j: indexMap.get(c.j),
+            type: c.type
+        }));
 
         updateLines();
-        const name = getBranchedAlkaneName(carbons, connections);
+        const name = getCompleteName(atoms, connections);
         if (name) {
             nameDisplay.textContent = name;
         } else {
@@ -201,14 +229,38 @@ elements.forEach(element => {
     }
 });
 
-function numberMainChainCarbons(carbons, connections) {
-    carbons.forEach(c => {
-        const numSpan = c.querySelector('.carbon-number');
-        if (numSpan) numSpan.remove();
+function numberMainChainCarbons(atoms, connections) {
+    // Clear existing numbers
+    atoms.forEach(a => {
+        if (a.element) {
+            const numSpan = a.element.querySelector('.carbon-number');
+            if (numSpan) numSpan.remove();
+        }
     });
-    const mainChain = findLongestChain(carbons, connections);
+
+    // Get carbon atoms and map indices
+    const carbonIndices = [];
+    const carbonAtoms = [];
+    atoms.forEach((atom, idx) => {
+        if (atom.type === 'C') {
+            carbonIndices.push(idx);
+            carbonAtoms.push(atom);
+        }
+    });
+
+    // Map connections
+    const carbonConnections = connections.filter(conn =>
+        atoms[conn.i].type === 'C' && atoms[conn.j].type === 'C'
+    ).map(conn => ({
+        i: carbonIndices.indexOf(conn.i),
+        j: carbonIndices.indexOf(conn.j),
+        type: conn.type
+    }));
+
+    const mainChain = findLongestChain(carbonAtoms, carbonConnections);
     mainChain.forEach((carbonIndex, i) => {
-        const carbonDiv = carbons[carbonIndex];
+        const originalIndex = carbonIndices[carbonIndex];
+        const carbonDiv = atoms[originalIndex].element;
         const numSpan = document.createElement('span');
         numSpan.className = 'carbon-number';
         numSpan.textContent = (i + 1).toString();

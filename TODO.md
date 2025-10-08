@@ -1,0 +1,4 @@
+- [x] Add getAnionName function to nomenclatura2.js
+- [x] Modify getCompleteName to check anion first
+- [x] Add getAnionName to exports
+- [ ] Test anion naming in the application (e.g., draw NO3-, SO4^2-, CO3^2-, HCO3- and check names)

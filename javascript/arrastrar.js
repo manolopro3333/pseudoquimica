@@ -6,15 +6,17 @@ let isHydrogen = false;
 let tempLine = null; 
 
 function startDrag(e) {
-    e.preventDefault(); 
+    e.preventDefault();
     draggedElement = e.target;
     draggedIndex = -1;
     isHydrogen = false;
     if (draggedElement.textContent === 'C') {
-        draggedIndex = carbons.indexOf(draggedElement);
+        draggedIndex = atoms.findIndex(a => a.element === draggedElement);
     } else if (draggedElement.textContent === 'H') {
         draggedIndex = hidrogenos.indexOf(draggedElement);
         isHydrogen = true;
+    } else {
+        draggedIndex = atoms.findIndex(a => a.element === draggedElement);
     }
     const rect = centerArea.getBoundingClientRect();
     const clientX = e.clientX || (e.touches && e.touches[0].clientX);
@@ -49,13 +51,13 @@ function drag(e) {
         draggedElement.style.left = (newX - getSize(draggedElement)/2) + 'px';
         draggedElement.style.top = (newY - getSize(draggedElement)/2) + 'px';
 
-        if (draggedIndex >= 0 && !isHydrogen) {78
+        if (draggedIndex >= 0 && !isHydrogen) {
             for (let att of hydrogenAttachments) {
                 if (att.cIndex === draggedIndex) {
                     const hEl = hidrogenos[att.hIndex];
                     if (hEl) {
-                        const cCenter = getCenter(carbons[draggedIndex]);
-                        const offsetX = 40; 
+                        const cCenter = getCenter(atoms[draggedIndex].element);
+                        const offsetX = 40;
                         const offsetY = 0;
                         hEl.style.left = (cCenter.x + offsetX - getSize(hEl)/2) + 'px';
                         hEl.style.top = (cCenter.y + offsetY - getSize(hEl)/2) + 'px';
@@ -73,13 +75,15 @@ function drag(e) {
                     tempLine.setAttribute('stroke-linecap', 'round');
                     linesSvg.appendChild(tempLine);
                 }
-                const otherCenter = getCenter(carbons[closestK]);
+                const otherCenter = getCenter(atoms[closestK].element);
                 tempLine.setAttribute('x1', otherCenter.x);
                 tempLine.setAttribute('y1', otherCenter.y);
                 tempLine.setAttribute('x2', targetX);
                 tempLine.setAttribute('y2', targetY);
             } else if (tempLine) {
-                linesSvg.removeChild(tempLine);
+                if (tempLine && tempLine.parentNode === linesSvg) {
+                    linesSvg.removeChild(tempLine);
+                }
                 tempLine = null;
             }
         } else if (isHydrogen) {
@@ -88,21 +92,21 @@ function drag(e) {
             let closestDist = Infinity;
             let targetX = null;
             let targetY = null;
-            for (let k = 0; k < carbons.length; k++) {
-                const cCenter = getCenter(carbons[k]);
-                const angles = getPrioritizedAngles();
-                for (let angle of angles) {
-                    const tx = cCenter.x + HYDROGEN_BOND_LENGTH * Math.cos(angle);
-                    const ty = cCenter.y + HYDROGEN_BOND_LENGTH * Math.sin(angle);
-                    const d = Math.sqrt((currentCenter.x - tx)**2 + (currentCenter.y - ty)**2);
-                    if (d < closestDist) {
-                        closestDist = d;
-                        closestK = k;
-                        targetX = tx;
-                        targetY = ty;
-                    }
+        for (let k = 0; k < atoms.length; k++) {
+            const cCenter = getCenter(atoms[k].element);
+            const angles = getPrioritizedAngles();
+            for (let angle of angles) {
+                const tx = cCenter.x + HYDROGEN_BOND_LENGTH * Math.cos(angle);
+                const ty = cCenter.y + HYDROGEN_BOND_LENGTH * Math.sin(angle);
+                const d = Math.sqrt((currentCenter.x - tx)**2 + (currentCenter.y - ty)**2);
+                if (d < closestDist) {
+                    closestDist = d;
+                    closestK = k;
+                    targetX = tx;
+                    targetY = ty;
                 }
             }
+        }
             if (closestDist < CONNECT_THRESHOLD && closestK !== -1) {
                 if (!tempLine) {
                     tempLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
@@ -112,13 +116,15 @@ function drag(e) {
                     tempLine.setAttribute('stroke-linecap', 'round');
                     linesSvg.appendChild(tempLine);
                 }
-                const cCenter = getCenter(carbons[closestK]);
+                const cCenter = getCenter(atoms[closestK].element);
                 tempLine.setAttribute('x1', cCenter.x);
                 tempLine.setAttribute('y1', cCenter.y);
                 tempLine.setAttribute('x2', targetX);
                 tempLine.setAttribute('y2', targetY);
             } else if (tempLine) {
-                linesSvg.removeChild(tempLine);
+                if (tempLine && tempLine.parentNode === linesSvg) {
+                    linesSvg.removeChild(tempLine);
+                }
                 tempLine = null;
             }
         }
@@ -127,7 +133,7 @@ function drag(e) {
 
 function stopDrag() {
     if (draggedIndex >= 0 && !isHydrogen) {
-        const draggedEl = carbons[draggedIndex];
+        const draggedEl = atoms[draggedIndex].element;
         let finalCenter = getCenter(draggedEl);
         const {closestK, closestTargetDist, targetX, targetY} = findClosestTarget(finalCenter.x, finalCenter.y);
         let snapped = false;
@@ -142,9 +148,9 @@ function stopDrag() {
             addConnection(draggedIndex, closestK);
         }
 
-        for (let k = 0; k < carbons.length; k++) {
-            if (k === draggedIndex) continue;
-            const otherCenter = getCenter(carbons[k]);
+        for (let k = 0; k < atoms.length; k++) {
+            if (atoms[k].type !== 'C' || k === draggedIndex) continue;
+            const otherCenter = getCenter(atoms[k].element);
             const dist = Math.sqrt((finalCenter.x - otherCenter.x)**2 + (finalCenter.y - otherCenter.y)**2);
             if (isConnected(draggedIndex, k)) {
                 if (dist > DISCONNECT_THRESHOLD) {
@@ -160,8 +166,8 @@ function stopDrag() {
         let closestDist = Infinity;
         let targetX = null;
         let targetY = null;
-        for (let k = 0; k < carbons.length; k++) {
-            const cCenter = getCenter(carbons[k]);
+        for (let k = 0; k < atoms.length; k++) {
+            const cCenter = getCenter(atoms[k].element);
             const angles = getPrioritizedAngles();
             for (let angle of angles) {
                 const tx = cCenter.x + HYDROGEN_BOND_LENGTH * Math.cos(angle);
@@ -189,7 +195,7 @@ function stopDrag() {
 
         for (let att of hydrogenAttachments) {
             if (att.hIndex === draggedIndex) {
-                const cCenter = getCenter(carbons[att.cIndex]);
+                const cCenter = getCenter(atoms[att.cIndex].element);
                 const dist = Math.sqrt((finalCenter.x - cCenter.x)**2 + (finalCenter.y - cCenter.y)**2);
                 if (dist > DISCONNECT_THRESHOLD) {
                     hydrogenAttachments = hydrogenAttachments.filter(a => !(a.hIndex === draggedIndex && a.cIndex === att.cIndex));
@@ -199,7 +205,9 @@ function stopDrag() {
     }
 
     if (tempLine) {
-        linesSvg.removeChild(tempLine);
+        if (tempLine && tempLine.parentNode === linesSvg) {
+            linesSvg.removeChild(tempLine);
+        }
         tempLine = null;
     }
 
