@@ -133,6 +133,13 @@ function drag(e) {
 
 function stopDrag() {
     if (draggedIndex >= 0 && !isHydrogen) {
+        if (!atoms[draggedIndex] || !atoms[draggedIndex].element) {
+            draggedElement = null;
+            draggedIndex = -1;
+            isHydrogen = false;
+            updateLines();
+            return;
+        }
         const draggedEl = atoms[draggedIndex].element;
         let finalCenter = getCenter(draggedEl);
         const {closestK, closestTargetDist, targetX, targetY} = findClosestTarget(finalCenter.x, finalCenter.y);
@@ -149,7 +156,8 @@ function stopDrag() {
         }
 
         for (let k = 0; k < atoms.length; k++) {
-            if (atoms[k].type !== 'C' || k === draggedIndex) continue;
+            if (!atoms[k] || atoms[k].type !== 'C' || k === draggedIndex) continue;
+            if (!atoms[k].element) continue;
             const otherCenter = getCenter(atoms[k].element);
             const dist = Math.sqrt((finalCenter.x - otherCenter.x)**2 + (finalCenter.y - otherCenter.y)**2);
             if (isConnected(draggedIndex, k)) {
@@ -160,6 +168,13 @@ function stopDrag() {
             }
         }
     } else if (isHydrogen) {
+        if (!hidrogenos[draggedIndex]) {
+            draggedElement = null;
+            draggedIndex = -1;
+            isHydrogen = false;
+            updateLines();
+            return;
+        }
         const draggedEl = hidrogenos[draggedIndex];
         let finalCenter = getCenter(draggedEl);
         let closestK = -1;
@@ -167,6 +182,7 @@ function stopDrag() {
         let targetX = null;
         let targetY = null;
         for (let k = 0; k < atoms.length; k++) {
+            if (!atoms[k] || !atoms[k].element) continue;
             const cCenter = getCenter(atoms[k].element);
             const angles = getPrioritizedAngles();
             for (let angle of angles) {
@@ -195,6 +211,7 @@ function stopDrag() {
 
         for (let att of hydrogenAttachments) {
             if (att.hIndex === draggedIndex) {
+                if (!atoms[att.cIndex] || !atoms[att.cIndex].element) continue;
                 const cCenter = getCenter(atoms[att.cIndex].element);
                 const dist = Math.sqrt((finalCenter.x - cCenter.x)**2 + (finalCenter.y - cCenter.y)**2);
                 if (dist > DISCONNECT_THRESHOLD) {

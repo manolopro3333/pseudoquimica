@@ -11,10 +11,12 @@ const HYDROGEN_SIZE = 40;
 const MAX_POS = WORLD_SIZE - ELEMENT_SIZE;
 
 function getSize(el) {
+    if (!el || !el.style) return ELEMENT_SIZE;
     return parseFloat(el.style.width) || ELEMENT_SIZE;
 }
 
 function getCenter(el) {
+    if (!el || !el.style) return { x: 0, y: 0 };
     const size = getSize(el);
     return {
         x: parseFloat(el.style.left) + size / 2,

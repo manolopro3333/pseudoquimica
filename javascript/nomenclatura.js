@@ -139,50 +139,7 @@ function hasCycle(carbons, connections) {
     return findCycle(carbons, connections).length > 0;
 }
 
-function findLongestChain(carbons, connections, start = null) {
-    const { adj, bondType } = buildAdj(carbons, connections);
-    const n = carbons.length;
-    if (n === 0) return [];
-    if (n === 1) return [0];
-    if (hasCycle(carbons, connections)) return findCycle(carbons, connections);
 
-    const degrees = adj.map(a => a.length);
-    const leaves = [];
-    if (start !== null) {
-        leaves.push(start);
-    } else {
-        for (let i = 0; i < n; i++) if (degrees[i] === 1) leaves.push(i);
-        if (leaves.length === 0) leaves.push(0);
-    }
-
-    let best = { path: [], unsat: 0, len: 0 };
-
-    function edgeUnsat(u, v) {
-        const a = Math.min(u, v);
-        const b = Math.max(u, v);
-        const t = bondType[`${a}-${b}`] || 'single';
-        return (t === 'double' || t === 'triple' || t === 2 || t === 3) ? 1 : 0;
-    }
-
-    function dfs(u, visited, path, unsatCount) {
-        visited[u] = true;
-        path.push(u);
-        if (unsatCount > best.unsat || (unsatCount === best.unsat && path.length > best.len)) {
-            best = { path: [...path], unsat: unsatCount, len: path.length };
-        }
-        for (const v of adj[u]) {
-            if (!visited[v]) {
-                const add = edgeUnsat(u, v);
-                dfs(v, visited, path, unsatCount + add);
-            }
-        }
-        path.pop();
-        visited[u] = false;
-    }
-
-    for (const leaf of leaves) dfs(leaf, new Array(n).fill(false), [], 0);
-    return best.path;
-}
 
 function findSubstituents(carbons, connections, mainChain) {
     const { adj, bondType } = buildAdj(carbons, connections);
@@ -252,6 +209,68 @@ function getSuffix(carbons, connections, mainChain) {
     if (hasDouble) return 'eno';
     return 'ano';
 }
+
+function findLongestChain(carbons, connections, start = null) {
+    const { adj, bondType } = buildAdj(carbons, connections);
+    const n = carbons.length;
+    if (n === 0) return [];
+    if (n === 1) return [0];
+    if (hasCycle(carbons, connections)) return findCycle(carbons, connections);
+
+    const degrees = adj.map(a => a.length);
+    const leaves = [];
+
+    function hasNonCarbonNeighbors(idx) {
+        const globalIdx = carbons[idx].index;
+        const bonded = connections.filter(c => c.i === globalIdx || c.j === globalIdx);
+        for (const c of bonded) {
+            const otherIdx = c.i === globalIdx ? c.j : c.i;
+            const otherAtom = atoms[otherIdx];
+            if (otherAtom && otherAtom.type !== 'C') return true;
+        }
+        return false;
+    }
+
+    if (start !== null) {
+        leaves.push(start);
+    } else {
+        for (let i = 0; i < n; i++) {
+            if (degrees[i] === 1 && !hasNonCarbonNeighbors(i)) leaves.push(i);
+        }
+        if (leaves.length === 0) for (let i = 0; i < n; i++) if (degrees[i] === 1) leaves.push(i);
+        if (leaves.length === 0) leaves.push(0);
+    }
+
+    let best = { path: [], unsat: 0, len: 0 };
+
+    function edgeUnsat(u, v) {
+        const a = Math.min(u, v);
+        const b = Math.max(u, v);
+        const t = bondType[`${a}-${b}`] || 'single';
+        return (t === 'double' || t === 'triple' || t === 2 || t === 3) ? 1 : 0;
+    }
+
+    function dfs(u, visited, path, unsatCount) {
+        visited[u] = true;
+        path.push(u);
+        if (path.length > best.len || (path.length === best.len && unsatCount > best.unsat)) {
+            best = { path: [...path], unsat: unsatCount, len: path.length };
+        }
+        for (const v of adj[u]) {
+            if (!visited[v]) {
+                const add = edgeUnsat(u, v);
+                dfs(v, visited, path, unsatCount + add);
+            }
+        }
+        path.pop();
+        visited[u] = false;
+    }
+
+    for (const leaf of leaves) dfs(leaf, new Array(n).fill(false), [], 0);
+    return best.path;
+}
+
+
 
 function getAlkaneName(carbons, connections) {
     if (!isSimpleChain(carbons, connections)) return null;

@@ -179,7 +179,14 @@ elements.forEach(element => {
         }
         const name = getCompleteName(atoms, connections);
         if (name) {
-            nameDisplay.textContent = name;
+            nameDisplay.innerHTML = name;
+            if (name === "I CANT STOP, HAGALEE") {
+                nameDisplay.innerHTML += ' <img src="css/hagale.webp" id="special-image" style="width:120px; height:120px;">';
+                setTimeout(() => {
+                    const imgEl = document.getElementById('special-image');
+                    if (imgEl) imgEl.remove();
+                }, 5000);
+            }
             numberMainChainCarbons(atoms, connections);
         } else {
             showErrorModal('No es una cadena simple');

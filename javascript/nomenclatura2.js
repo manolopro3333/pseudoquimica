@@ -8,6 +8,9 @@ const functionalGroupPriority = {
     'hidroxi': 6,
     'amino': 7,
     'nitro': 8,
+    'nitroso': 7,
+    'nitrito': 6,
+    'nitrato': 5,
     'sulfhidrilo': 9,
     'sulfoxido': 10,
     'sulfona': 11,
@@ -17,6 +20,9 @@ const functionalGroupPriority = {
 
 const functionalGroupNames = {
     'NO2': 'nitro',
+    'NO': 'nitroso',
+    'ONO': 'nitrito',
+    'ONO2': 'nitrato',
     'NH2': 'amino',
     'OH': 'hidroxi',
     'SH': 'sulfhidrilo',
@@ -49,13 +55,56 @@ function detectFunctionalGroups(atoms, connections) {
         if (atom.type === 'N') {
             const neighbors = adj[i] || [];
             const oxygenNeighbors = neighbors.filter(n => atoms[n] && atoms[n].type === 'O');
+
+            // Detect nitroso: N with 1 O, double bond
+            if (oxygenNeighbors.length === 1) {
+                const ox = oxygenNeighbors[0];
+                const bondKey = `${Math.min(i, ox)}-${Math.max(i, ox)}`;
+                const bond = bondType[bondKey];
+                if (bond === 'double') {
+                    functionalGroups.push({ type: 'NO', position: i, priority: functionalGroupPriority['nitroso'], name: 'nitroso' });
+                    continue;
+                }
+            }
+
+            // Detect nitrito: N with 2 O, one double, one single to C
+            if (oxygenNeighbors.length === 2) {
+                let hasDouble = false;
+                let hasSingleToC = false;
+                for (const ox of oxygenNeighbors) {
+                    const bondKey = `${Math.min(i, ox)}-${Math.max(i, ox)}`;
+                    const bond = bondType[bondKey];
+                    if (bond === 'double') hasDouble = true;
+                    // Check if O is connected to C
+                    const oxNeighbors = adj[ox] || [];
+                    if (oxNeighbors.some(nb => atoms[nb] && atoms[nb].type === 'C' && nb !== i)) {
+                        hasSingleToC = true;
+                    }
+                }
+                if (hasDouble && hasSingleToC) {
+                    functionalGroups.push({ type: 'ONO', position: i, priority: functionalGroupPriority['nitrito'], name: 'nitrito' });
+                    continue;
+                }
+            }
+
+            // Detect nitrato: N with 3 O, connected to C via O
+            if (oxygenNeighbors.length === 3) {
+                const connectedToC = oxygenNeighbors.some(ox => {
+                    const oxNeighbors = adj[ox] || [];
+                    return oxNeighbors.some(nb => atoms[nb] && atoms[nb].type === 'C' && nb !== i);
+                });
+                if (connectedToC) {
+                    functionalGroups.push({ type: 'ONO2', position: i, priority: functionalGroupPriority['nitrato'], name: 'nitrato' });
+                    continue;
+                }
+            }
+
+            // Detect nitro: N with 2 O, not nitrito
             if (oxygenNeighbors.length >= 2) {
                 functionalGroups.push({ type: 'NO2', position: i, priority: functionalGroupPriority['nitro'], name: 'nitro' });
             }
-        }
 
-        if (atom.type === 'N') {
-            const neighbors = adj[i] || [];
+            // Amino
             const carbonNeighbors = neighbors.filter(n => atoms[n] && atoms[n].type === 'C');
             if (carbonNeighbors.length === 1 && neighbors.length <= 3) {
                 functionalGroups.push({ type: 'NH2', position: i, priority: functionalGroupPriority['amino'], name: 'amino' });
@@ -74,9 +123,6 @@ function detectFunctionalGroups(atoms, connections) {
             const neighbors = adj[i] || [];
             const oxygenNeighbors = neighbors.filter(n => atoms[n] && atoms[n].type === 'O');
             const carbonNeighbors = neighbors.filter(n => atoms[n] && atoms[n].type === 'C');
-
-            console.log("oxigenos: " + oxygenNeighbors.length + " carbonos: " + carbonNeighbors.length);
-
 
             // sulfonico (–SO3H)
             if (oxygenNeighbors.length >= 3) {
@@ -176,65 +222,15 @@ function getFunctionalGroupName(complexName, functionalGroups, carbons, connecti
 
     const mainChain = findLongestChain(carbons, connections);
     let finalName = complexName;
+    let acidPrefix = '';
+    let suffixReplaced = false;
 
-    const carboxiloGroup = functionalGroups.find(fg => fg.type === 'COOH');
-    if (carboxiloGroup) {
-        const carbonPos = findConnectedCarbon(carboxiloGroup.position, allAtoms, allConnections);
-        if (carbonPos !== -1) {
-            const carbonIndex = carbonIndices.indexOf(carbonPos);
-            if (carbonIndex !== -1) {
-                const suffixMatch = finalName.match(/(ano|eno|ino)$/);
-                if (suffixMatch) {
-                    const suffix = suffixMatch[1];
-                    const newSuffix = suffix === 'ano' ? 'anoico' : suffix === 'eno' ? 'enoico' : 'inoico';
-                    finalName = `ácido ${finalName.replace(suffix, newSuffix)}`;
-                }
-                return finalName;
-            }
-        }
-    }
+    const suffixTypes = ['SO2', 'SO2_sulfonilo', 'OH', 'CO', 'SH', 'SO', 'NH2', 'CHO', 'COOH', 'SO3H', 'SO2H', 'ONO', 'ONO2'];
 
-    const sulfoGroup = functionalGroups.find(fg => fg.type === 'SO3H');
-    if (sulfoGroup) {
-        const carbonPos = findConnectedCarbon(sulfoGroup.position, allAtoms, allConnections);
-        if (carbonPos !== -1) {
-            const carbonIndex = carbonIndices.indexOf(carbonPos);
-            if (carbonIndex !== -1) {
-                const position = mainChain.indexOf(carbonIndex) + 1;
-                finalName = `ácido ${position}-${finalName.replace('ano', 'sulfónico')}`;
-                return finalName;
-            }
-        }
-    }
-
-    const sulfinicoGroup = functionalGroups.find(fg => fg.type === 'SO2H');
-    if (sulfinicoGroup) {
-        const carbonPos = findConnectedCarbon(sulfinicoGroup.position, allAtoms, allConnections);
-        if (carbonPos !== -1) {
-            const carbonIndex = carbonIndices.indexOf(carbonPos);
-            if (carbonIndex !== -1) {
-                const position = mainChain.indexOf(carbonIndex) + 1;
-                finalName = `ácido ${position}-${finalName.replace('ano', 'sulfinico')}`;
-                return finalName;
-            }
-        }
-    }
-
-    const formiloGroup = functionalGroups.find(fg => fg.type === 'CHO');
-    if (formiloGroup) {
-        const carbonPos = findConnectedCarbon(formiloGroup.position, allAtoms, allConnections);
-        if (carbonPos !== -1) {
-            const carbonIndex = carbonIndices.indexOf(carbonPos);
-            if (carbonIndex !== -1) {
-                finalName = finalName.replace('ano', 'anal');
-                return finalName;
-            }
-        }
-    }
-
-    const oxoGroup = functionalGroups.find(fg => fg.type === 'CO');
-    if (oxoGroup) {
-        const carbonPos = findConnectedCarbon(oxoGroup.position, allAtoms, allConnections);
+    // Find the principal functional group (highest priority suffix)
+    const principal = functionalGroups.find(fg => suffixTypes.includes(fg.type));
+    if (principal) {
+        const carbonPos = findConnectedCarbon(principal.position, allAtoms, allConnections);
         if (carbonPos !== -1) {
             const carbonIndex = carbonIndices.indexOf(carbonPos);
             if (carbonIndex !== -1) {
@@ -242,123 +238,52 @@ function getFunctionalGroupName(complexName, functionalGroups, carbons, connecti
                 const suffixMatch = finalName.match(/(ano|eno|ino)$/);
                 if (suffixMatch) {
                     const suffix = suffixMatch[1];
-                    const newSuffix = suffix === 'ano' ? `an-${position}-ona` : suffix === 'eno' ? `en-${position}-ona` : `in-${position}-ona`;
-                    finalName = finalName.replace(suffix, newSuffix);
+                    let newSuffix = '';
+                    if (principal.type === 'COOH') {
+                        newSuffix = suffix === 'ano' ? 'anoico' : suffix === 'eno' ? 'enoico' : 'inoico';
+                        acidPrefix = 'ácido ';
+                    } else if (principal.type === 'SO3H') {
+                        newSuffix = suffix === 'ano' ? 'sulfónico' : suffix === 'eno' ? 'sulfónico' : 'sulfónico';
+                        finalName = `${position}-${finalName.replace(/(ano|eno|ino)$/, newSuffix)}`;
+                        acidPrefix = 'ácido ';
+                        suffixReplaced = true;
+                        // Skip further replacement
+                    } else if (principal.type === 'SO2H') {
+                        newSuffix = suffix === 'ano' ? 'sulfinico' : suffix === 'eno' ? 'sulfinico' : 'sulfinico';
+                        finalName = `${position}-${finalName.replace(/(ano|eno|ino)$/, newSuffix)}`;
+                        acidPrefix = 'ácido ';
+                        suffixReplaced = true;
+                    } else if (principal.type === 'CHO') {
+                        newSuffix = 'anal';
+                    } else if (principal.type === 'CO') {
+                        newSuffix = suffix === 'ano' ? `an-${position}-ona` : suffix === 'eno' ? `en-${position}-ona` : `in-${position}-ona`;
+                    } else if (principal.type === 'OH') {
+                        newSuffix = suffix === 'ano' ? `an-${position}-ol` : suffix === 'eno' ? `en-${position}-ol` : `in-${position}-ol`;
+                    } else if (principal.type === 'SH') {
+                        newSuffix = suffix === 'ano' ? `an-${position}-tiol` : suffix === 'eno' ? `en-${position}-tiol` : `in-${position}-tiol`;
+                    } else if (principal.type === 'S=O') {
+                        newSuffix = suffix === 'ano' ? `an-${position}-sulfóxido` : suffix === 'eno' ? `en-${position}-sulfóxido` : `in-${position}-sulfóxido`;
+                    } else if (principal.type === 'SO2') {
+                        newSuffix = suffix === 'ano' ? `an-${position}-sulfona` : suffix === 'eno' ? `en-${position}-sulfona` : `in-${position}-sulfona`;
+                    } else if (principal.type === 'SO2_sulfonilo') {
+                        newSuffix = suffix === 'ano' ? `an-${position}-sulfonilo` : suffix === 'eno' ? `en-${position}-sulfonilo` : `in-${position}-sulfonilo`;
+                    } else if (principal.type === 'NH2') {
+                        newSuffix = suffix === 'ano' ? `an-${position}-amina` : suffix === 'eno' ? `en-${position}-amina` : `in-${position}-amina`;
+                    } else if (principal.type === 'ONO') {
+                        newSuffix = suffix === 'ano' ? `an-${position}-nitrito` : suffix === 'eno' ? `en-${position}-nitrito` : `in-${position}-nitrito`;
+                    } else if (principal.type === 'ONO2') {
+                        newSuffix = suffix === 'ano' ? `an-${position}-nitrato` : suffix === 'eno' ? `en-${position}-nitrato` : `in-${position}-nitrato`;
+                    }
+                    if (newSuffix && !suffixReplaced) {
+                        finalName = finalName.replace(suffix, newSuffix);
+                        suffixReplaced = true;
+                    }
                 }
-                return finalName;
             }
         }
     }
 
-    const hidroxiGroup = functionalGroups.find(fg => fg.type === 'OH');
-    if (hidroxiGroup) {
-        const carbonPos = findConnectedCarbon(hidroxiGroup.position, allAtoms, allConnections);
-        if (carbonPos !== -1) {
-            const carbonIndex = carbonIndices.indexOf(carbonPos);
-            if (carbonIndex !== -1) {
-                const position = mainChain.indexOf(carbonIndex) + 1;
-                const suffixMatch = finalName.match(/(ano|eno|ino)$/);
-                if (suffixMatch) {
-                    const suffix = suffixMatch[1];
-                    const newSuffix = suffix === 'ano' ? `an-${position}-ol` : suffix === 'eno' ? `en-${position}-ol` : `in-${position}-ol`;
-                    finalName = finalName.replace(suffix, newSuffix);
-                }
-                return finalName;
-            }
-        }
-    }
-
-    const tiolGroup = functionalGroups.find(fg => fg.type === 'SH');
-    if (tiolGroup) {
-        const carbonPos = findConnectedCarbon(tiolGroup.position, allAtoms, allConnections);
-        if (carbonPos !== -1) {
-            const carbonIndex = carbonIndices.indexOf(carbonPos);
-            if (carbonIndex !== -1) {
-                const position = mainChain.indexOf(carbonIndex) + 1;
-                const suffixMatch = finalName.match(/(ano|eno|ino)$/);
-                if (suffixMatch) {
-                    const suffix = suffixMatch[1];
-                    const newSuffix = suffix === 'ano' ? `an-${position}-tiol` : suffix === 'eno' ? `en-${position}-tiol` : `in-${position}-tiol`;
-                    finalName = finalName.replace(suffix, newSuffix);
-                }
-                return finalName;
-            }
-        }
-    }
-
-    const sulfoxidoGroup = functionalGroups.find(fg => fg.type === 'S=O');
-    if (sulfoxidoGroup) {
-        const carbonPos = findConnectedCarbon(sulfoxidoGroup.position, allAtoms, allConnections);
-        if (carbonPos !== -1) {
-            const carbonIndex = carbonIndices.indexOf(carbonPos);
-            if (carbonIndex !== -1) {
-                const position = mainChain.indexOf(carbonIndex) + 1;
-                const suffixMatch = finalName.match(/(ano|eno|ino)$/);
-                if (suffixMatch) {
-                    const suffix = suffixMatch[1];
-                    const newSuffix = suffix === 'ano' ? `an-${position}-sulfóxido` : suffix === 'eno' ? `en-${position}-sulfóxido` : `in-${position}-sulfóxido`;
-                    finalName = finalName.replace(suffix, newSuffix);
-                }
-                return finalName;
-            }
-        }
-    }
-
-    const sulfonaGroup = functionalGroups.find(fg => fg.type === 'SO2');
-    if (sulfonaGroup) {
-        const carbonPos = findConnectedCarbon(sulfonaGroup.position, allAtoms, allConnections);
-        if (carbonPos !== -1) {
-            const carbonIndex = carbonIndices.indexOf(carbonPos);
-            if (carbonIndex !== -1) {
-                const position = mainChain.indexOf(carbonIndex) + 1;
-                const suffixMatch = finalName.match(/(ano|eno|ino)$/);
-                if (suffixMatch) {
-                    const suffix = suffixMatch[1];
-                    const newSuffix = suffix === 'ano' ? `an-${position}-sulfona` : suffix === 'eno' ? `en-${position}-sulfona` : `in-${position}-sulfona`;
-                    finalName = finalName.replace(suffix, newSuffix);
-                }
-                return finalName;
-            }
-        }
-    }
-
-    const sulfoniloGroup = functionalGroups.find(fg => fg.type === 'SO2_sulfonilo');
-    if (sulfoniloGroup) {
-        const carbonPos = findConnectedCarbon(sulfoniloGroup.position, allAtoms, allConnections);
-        if (carbonPos !== -1) {
-            const carbonIndex = carbonIndices.indexOf(carbonPos);
-            if (carbonIndex !== -1) {
-                const position = mainChain.indexOf(carbonIndex) + 1;
-                const suffixMatch = finalName.match(/(ano|eno|ino)$/);
-                if (suffixMatch) {
-                    const suffix = suffixMatch[1];
-                    const newSuffix = suffix === 'ano' ? `an-${position}-sulfonilo` : suffix === 'eno' ? `en-${position}-sulfonilo` : `in-${position}-sulfonilo`;
-                    finalName = finalName.replace(suffix, newSuffix);
-                }
-                return finalName;
-            }
-        }
-    }
-
-    const aminoGroup = functionalGroups.find(fg => fg.type === 'NH2');
-    if (aminoGroup) {
-        const carbonPos = findConnectedCarbon(aminoGroup.position, allAtoms, allConnections);
-        if (carbonPos !== -1) {
-            const carbonIndex = carbonIndices.indexOf(carbonPos);
-            if (carbonIndex !== -1) {
-                const position = mainChain.indexOf(carbonIndex) + 1;
-                const suffixMatch = finalName.match(/(ano|eno|ino)$/);
-                if (suffixMatch) {
-                    const suffix = suffixMatch[1];
-                    const newSuffix = suffix === 'ano' ? `an-${position}-amina` : suffix === 'eno' ? `en-${position}-amina` : `in-${position}-amina`;
-                    finalName = finalName.replace(suffix, newSuffix);
-                }
-                return finalName;
-            }
-        }
-    }
-
-    const prefixGroups = functionalGroups.filter(fg => fg.type === 'NO2' || (fg.type in haloGroups));
+    const prefixGroups = functionalGroups.filter(fg => !suffixTypes.includes(fg.type) && (fg.type === 'NO2' || fg.type === 'NO' || fg.type === 'OH' || (fg.type in haloGroups)));
     if (prefixGroups.length > 0) {
         const prefixParts = [];
         for (const group of prefixGroups) {
@@ -393,6 +318,10 @@ function getFunctionalGroupName(complexName, functionalGroups, carbons, connecti
         if (prefixStrings.length > 0) finalName = `${prefixStrings.join('-')} ${finalName}`;
     }
 
+    if (acidPrefix) {
+        finalName = acidPrefix + finalName;
+    }
+
     return finalName;
 }
 
@@ -413,6 +342,18 @@ function findConnectedCarbon(atomIndex, allAtoms, allConnections) {
 }
 
 function getCompleteName(atoms, connections) {
+    // Check for water (H2O)
+    const counts = {};
+    atoms.forEach(a => counts[a.type] = (counts[a.type] || 0) + 1);
+    hidrogenos.forEach(h => counts['H'] = (counts['H'] || 0) + 1);
+    if (counts['H'] === 2 && counts['O'] === 1 && Object.keys(counts).length === 2) {
+        return 'agua';
+    }
+
+    if (isSpecialMolecule(atoms, connections)) {
+        return "I CANT STOP, HAGALEE";
+    }
+
     const anionName = getAnionName(atoms, connections);
     if (anionName) return anionName;
 
@@ -454,8 +395,52 @@ function getCompleteName(atoms, connections) {
     });
 
     let mainChainOverride = null;
-    const suffixTypes = ['OH', 'CO', 'SH', 'SO2', 'SO', 'SO2_sulfonilo', 'NH2', 'CHO', 'COOH', 'SO3H', 'SO2H'];
+    const suffixTypes = ['SO2', 'SO2_sulfonilo', 'OH', 'CO', 'SH', 'SO', 'NH2', 'CHO', 'COOH', 'SO3H', 'SO2H', 'ONO', 'ONO2'];
     const principal = functionalGroups.find(fg => suffixTypes.includes(fg.type));
+
+    // Special handling for sulfona as principal functional group
+    if (principal && principal.type === 'SO2') {
+        const { adj } = buildAdj(atoms, connections);
+        const neighbors = adj[principal.position] || [];
+        const carbonNeighbors = neighbors.filter(n => atoms[n] && atoms[n].type === 'C');
+        if (carbonNeighbors.length === 2) {
+            const alkylNames = carbonNeighbors.map(carbonIdx => {
+                // Get the alkyl name for this carbon branch
+                const branchAtoms = [];
+                const branchIndices = [];
+                const visited = new Set();
+                function dfs(node) {
+                    visited.add(node);
+                    branchAtoms.push(atoms[node]);
+                    branchIndices.push(node);
+                    for (const nb of adj[node]) {
+                        if (nb === principal.position) continue;
+                        if (!visited.has(nb)) dfs(nb);
+                    }
+                }
+                dfs(carbonIdx);
+                // Filter to carbons only for naming
+                const branchCarbonIndices = branchIndices.filter(idx => atoms[idx].type === 'C');
+                const branchCarbonAtoms = branchCarbonIndices.map(idx => atoms[idx]);
+                const branchCarbonConnections = connections.filter(c =>
+                    branchCarbonIndices.includes(c.i) && branchCarbonIndices.includes(c.j)
+                ).map(c => ({
+                    i: branchCarbonIndices.indexOf(c.i),
+                    j: branchCarbonIndices.indexOf(c.j),
+                    type: c.type
+                }));
+                const alkylName = getBranchedAlkaneName(atoms, branchCarbonAtoms, branchCarbonConnections, branchCarbonIndices);
+                return alkylName || 'metil';
+            });
+            alkylNames.sort();
+            if (alkylNames[0] === alkylNames[1]) {
+                return alkylNames[0] === 'metil' ? `dimetil sulfona` : `di${alkylNames[0]} sulfona`;
+            } else {
+                return `${alkylNames[0]} ${alkylNames[1]} sulfona`;
+            }
+        }
+    }
+
     if (principal) {
         const carbonPos = findConnectedCarbon(principal.position, atoms, connections);
         if (carbonPos !== -1) {
@@ -540,15 +525,70 @@ function getAnionName(atoms, connections) {
 function getDetailedNomenclature(atoms, connections) {
     const completeName = getCompleteName(atoms, connections);
     const functionalGroups = getFunctionalGroupInfo(atoms, connections);
+    const carbonIndices = [];
+    atoms.forEach((atom, idx) => {
+        if (atom && atom.type === 'C') carbonIndices.push(idx);
+    });
+    const carbonAtoms = carbonIndices.map(idx => atoms[idx]);
+    const carbonConnections = connections.filter(conn =>
+        atoms[conn.i] && atoms[conn.i].type === 'C' && atoms[conn.j] && atoms[conn.j].type === 'C'
+    ).map(conn => ({
+        i: carbonIndices.indexOf(conn.i),
+        j: carbonIndices.indexOf(conn.j),
+        type: conn.type
+    }));
     return {
         nombreCompleto: completeName,
         gruposFuncionales: functionalGroups,
-        cadenaPrincipal: findLongestChain(
-            atoms.filter(atom => atom && atom.type === 'C'),
-            connections.filter(conn => atoms[conn.i] && atoms[conn.i].type === 'C' && atoms[conn.j] && atoms[conn.j].type === 'C')
-        ).length
+        cadenaPrincipal: findLongestChain(carbonAtoms, carbonConnections).length
     };
 }
+
+function isSpecialMolecule(atoms, connections) {
+    // New check: if molecule contains sulfur (S), nitro (NO2), or iodine (I), return false
+    if (atoms.some(a => a.type === 'S' || a.type === 'I' || a.type === 'NO2')) {
+        return false;
+    }
+
+    const carbonIndices = atoms.map((a, i) => a.type === 'C' ? i : -1).filter(i => i !== -1);
+    if (carbonIndices.length < 5) return false;
+
+    const { adj } = buildAdj(atoms, connections);
+    const functionalGroups = detectFunctionalGroups(atoms, connections);
+
+    const coohGroups = functionalGroups.filter(fg => fg.type === 'COOH');
+    const ohGroups = functionalGroups.filter(fg => fg.type === 'OH');
+    if (coohGroups.length < 3 || ohGroups.length < 1) return false;
+
+    const carbonConnections = connections.filter(conn => carbonIndices.includes(conn.i) && carbonIndices.includes(conn.j));
+    const carbonAtoms = carbonIndices.map(idx => atoms[idx]);
+    const longest = findLongestChain(carbonAtoms, carbonConnections);
+    const mainChain = longest;
+    const chainCarbons = mainChain.map(i => carbonIndices[i]);
+
+    const coohOnEnds = coohGroups.filter(fg => {
+        const connectedC = findConnectedCarbon(fg.position, atoms, connections);
+        return connectedC === chainCarbons[0] || connectedC === chainCarbons[chainCarbons.length - 1];
+    });
+
+    if (coohOnEnds.length !== 2) return false;
+
+    const ohOnMiddle = ohGroups.some(fg => {
+        const connectedC = findConnectedCarbon(fg.position, atoms, connections);
+        return chainCarbons.includes(connectedC) && connectedC !== chainCarbons[0] && connectedC !== chainCarbons[chainCarbons.length - 1];
+    });
+
+    if (!ohOnMiddle) return false;
+
+    const externalCOOH = coohGroups.find(fg => {
+        const connectedC = findConnectedCarbon(fg.position, atoms, connections);
+        return !chainCarbons.includes(connectedC);
+    });
+
+    return !!externalCOOH;
+}
+
+
 
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
@@ -560,6 +600,7 @@ if (typeof module !== 'undefined' && module.exports) {
         getAnionName,
         functionalGroupPriority,
         functionalGroupNames,
-        haloGroups
+        haloGroups,
+        isSpecialMolecule
     };
 }
