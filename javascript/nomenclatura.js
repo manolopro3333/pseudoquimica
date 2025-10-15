@@ -217,32 +217,7 @@ function findLongestChain(carbons, connections, start = null) {
     if (n === 1) return [0];
     if (hasCycle(carbons, connections)) return findCycle(carbons, connections);
 
-    const degrees = adj.map(a => a.length);
-    const leaves = [];
-
-    function hasNonCarbonNeighbors(idx) {
-        const globalIdx = carbons[idx].index;
-        const bonded = connections.filter(c => c.i === globalIdx || c.j === globalIdx);
-        for (const c of bonded) {
-            const otherIdx = c.i === globalIdx ? c.j : c.i;
-            const otherAtom = atoms[otherIdx];
-            if (otherAtom && otherAtom.type !== 'C') return true;
-        }
-        return false;
-    }
-
-    if (start !== null) {
-        leaves.push(start);
-    } else {
-        for (let i = 0; i < n; i++) {
-            if (degrees[i] === 1 && !hasNonCarbonNeighbors(i)) leaves.push(i);
-        }
-        if (leaves.length === 0) for (let i = 0; i < n; i++) if (degrees[i] === 1) leaves.push(i);
-        if (leaves.length === 0) leaves.push(0);
-    }
-
-    let best = { path: [], unsat: 0, len: 0 };
-
+    // helper: determina si la arista u-v es insaturación
     function edgeUnsat(u, v) {
         const a = Math.min(u, v);
         const b = Math.max(u, v);
@@ -250,25 +225,41 @@ function findLongestChain(carbons, connections, start = null) {
         return (t === 'double' || t === 'triple' || t === 2 || t === 3) ? 1 : 0;
     }
 
-    function dfs(u, visited, path, unsatCount) {
+    let best = { path: [], unsat: 0, len: 0 };
+    const visited = new Array(n).fill(false);
+
+    function dfs(u, path, unsatCount) {
         visited[u] = true;
         path.push(u);
+
+        // actualizar mejor solución
         if (path.length > best.len || (path.length === best.len && unsatCount > best.unsat)) {
             best = { path: [...path], unsat: unsatCount, len: path.length };
         }
-        for (const v of adj[u]) {
+
+        for (const v of adj[u] || []) {
             if (!visited[v]) {
                 const add = edgeUnsat(u, v);
-                dfs(v, visited, path, unsatCount + add);
+                dfs(v, path, unsatCount + add);
             }
         }
+
         path.pop();
         visited[u] = false;
     }
 
-    for (const leaf of leaves) dfs(leaf, new Array(n).fill(false), [], 0);
+    if (start !== null && start >= 0 && start < n) {
+        dfs(start, [], 0);
+    } else {
+        // DFS desde cada nodo para garantizar la máxima ruta simple
+        for (let i = 0; i < n; i++) {
+            dfs(i, [], 0);
+        }
+    }
+
     return best.path;
 }
+
 
 
 
@@ -286,18 +277,38 @@ function getBranchedAlkaneName(atoms, carbons, connections, carbonIndices, mainC
     const cycle = findCycle(carbons, connections);
     const cycleSize = cycle.length;
 
+    // Caso 1: toda la molécula es un ciclo
     if (cycleSize > 0 && cycleSize === carbons.length) {
+        console.log('Caso 1: toda la molécula es un ciclo');
+        console.log('cycleSize:', cycleSize);
         const suffix = getCycleSuffix(carbons, connections);
-        const mainName = alkaneNames[cycleSize] ? alkaneNames[cycleSize].replace('ano', suffix) : `${cycleSize}${suffix}`;
+        console.log('suffix:', suffix);
+        const mainName = alkaneNames[cycleSize]
+            ? alkaneNames[cycleSize].replace('ano', suffix)
+            : `${cycleSize}${suffix}`;
+        console.log('mainName:', mainName);
         return `ciclo${mainName}`;
-    } else if (cycleSize > 0 && cycleSize < carbons.length) {
+    }
+
+    // Caso 2: ciclo con sustituyentes fuera
+    else if (cycleSize > 0 && cycleSize < carbons.length) {
+        console.log('Caso 2: ciclo con sustituyentes');
+        console.log('cycle:', cycle);
+        console.log('carbons:', carbons);
+        console.log('atoms:', atoms);
+        console.log('carbonIndices:', carbonIndices);
         const cycleSet = new Set(cycle);
         const subs = [];
         const { adj } = buildAdj(carbons, connections);
+        console.log('adj:', adj);
+
         for (let i = 0; i < cycle.length; i++) {
             const node = cycle[i];
+            console.log('Processing cycle node:', node);
             for (const neigh of adj[node]) {
+                console.log('Neighbor:', neigh);
                 if (cycleSet.has(neigh)) continue;
+
                 const branchNodes = [];
                 (function dfsBranch(u, parent) {
                     branchNodes.push(u);
@@ -307,67 +318,144 @@ function getBranchedAlkaneName(atoms, carbons, connections, carbonIndices, mainC
                         if (!branchNodes.includes(v)) dfsBranch(v, u);
                     }
                 })(neigh, node);
+                console.log('branchNodes:', branchNodes);
+
                 subs.push({ position: i + 1, carbons: branchNodes });
             }
         }
+
         const grouped = {};
         subs.forEach(s => {
-            const name = getSubstituentName(s.carbons, carbons, connections);
+            console.log('Substituent carbons:', s.carbons);
+            const fullIndices = s.carbons.map(idx => carbonIndices[idx]);
+            console.log('fullIndices:', fullIndices);
+            const name = getSubstituentName(fullIndices, atoms, connections);
+            console.log('name:', name);
             if (!grouped[name]) grouped[name] = [];
             grouped[name].push(s.position);
         });
+        console.log('grouped:', grouped);
+
         const parts = [];
         for (const [name, positions] of Object.entries(grouped)) {
-            positions.sort((a,b)=>a-b);
+            positions.sort((a, b) => a - b);
             let prefix = '';
             if (positions.length === 2) prefix = 'di';
             else if (positions.length === 3) prefix = 'tri';
             else if (positions.length === 4) prefix = 'tetra';
             parts.push(`${positions.join(',')}-${prefix}${name}`);
         }
+
         const suffix = getCycleSuffix(carbons, connections);
-        const mainName = alkaneNames[cycleSize] ? alkaneNames[cycleSize].replace('ano', suffix) : `${cycleSize}${suffix}`;
+        const mainName = alkaneNames[cycleSize]
+            ? alkaneNames[cycleSize].replace('ano', suffix)
+            : `${cycleSize}${suffix}`;
+
         return parts.length ? `${parts.join(' ')} ciclo${mainName}` : `ciclo${mainName}`;
-    } else {
+    }
+
+    // Caso 3: cadena abierta (principal)
+    else {
+        console.log('Caso 3: cadena abierta');
+        console.log('mainChain:', mainChain);
+        console.log('atoms:', atoms);
+        console.log('carbonIndices:', carbonIndices);
         if (!mainChain) mainChain = findLongestChain(carbons, connections);
         if (mainChain.length === 0) return null;
+
         const substituents = [];
         const { adj } = buildAdj(atoms, connections);
+        console.log('adj:', adj);
+
         for (const mainIdx of mainChain) {
+            console.log('Processing mainIdx:', mainIdx);
             const actualMainIdx = carbonIndices[mainIdx];
+            console.log('actualMainIdx:', actualMainIdx);
             for (const neigh of adj[actualMainIdx]) {
-                if (atoms[neigh].type === 'C') continue;
+                console.log('Neighbor:', neigh, 'type:', atoms[neigh].type);
+                if (atoms[neigh].type === 'C') {
+                    const idxInCarbons = carbonIndices.indexOf(neigh);
+                    if (idxInCarbons !== -1 && mainChain.includes(idxInCarbons)) {
+                        console.log('Skipping main-chain carbon');
+                        continue;
+                    }
+                }
+
                 const branchNodes = [];
                 const visited = new Set();
+                const mainChainIndices = mainChain.map(idx => carbonIndices[idx]);
+
                 function dfsBranch(node, parent) {
                     visited.add(node);
                     branchNodes.push(node);
                     for (const nb of adj[node]) {
                         if (nb === parent) continue;
-                        if (atoms[nb].type === 'C' && carbonIndices.includes(nb)) continue;
+                        if (atoms[nb].type === 'C' && mainChainIndices.includes(nb)) continue;
                         if (!visited.has(nb)) dfsBranch(nb, node);
                     }
                 }
+
                 dfsBranch(neigh, actualMainIdx);
+                console.log('branchNodes:', branchNodes);
+
+                if (branchNodes.length === 0) continue;
+
                 const branchAtoms = branchNodes.map(i => atoms[i]);
-                const branchConnections = connections.filter(c => branchNodes.includes(c.i) && branchNodes.includes(c.j));
-                const functional = detectSubstituentFunctionalGroup(branchAtoms, branchConnections);
-                if (functional) {
+                const branchConnections = connections.filter(
+                    c => branchNodes.includes(c.i) && branchNodes.includes(c.j)
+                );
+
+                const linkType = connections.find(
+                    c =>
+                        (c.i === actualMainIdx && c.j === neigh) ||
+                        (c.i === neigh && c.j === actualMainIdx)
+                )?.type || 'single';
+
+                const name = getSubstituentName(branchNodes, atoms, branchConnections, linkType);
+                console.log('name:', name);
+                if (name) {
                     substituents.push({
                         position: mainIdx + 1,
-                        name: functional,
-                        linkType: connections.find(c => (c.i === actualMainIdx && c.j === neigh) || (c.i === neigh && c.j === actualMainIdx))?.type || 'single'
+                        name: name,
+                        linkType: linkType
                     });
                 }
             }
         }
-        const substituentStr = substituents.map(s => `${s.position}-${s.name}`).join(' ');
+        console.log('substituents found:', substituents);
+
+        // Group substituents by name
+        const groupedSubs = {};
+        substituents.forEach(s => {
+            if (!groupedSubs[s.name]) groupedSubs[s.name] = [];
+            groupedSubs[s.name].push(s.position);
+        });
+
+        const substituentParts = [];
+        for (const [name, positions] of Object.entries(groupedSubs)) {
+            positions.sort((a, b) => a - b);
+            let prefix = '';
+            if (positions.length === 2) prefix = 'di';
+            else if (positions.length === 3) prefix = 'tri';
+            else if (positions.length === 4) prefix = 'tetra';
+            substituentParts.push(`${positions.join(',')}-${prefix}${name}`);
+        }
+
+        const substituentStr = substituentParts.join(' ');
         const suffix = getSuffix(carbons, connections, mainChain);
-        let mainName = alkaneNames[mainChain.length] ? alkaneNames[mainChain.length].replace('ano', suffix) : `${mainChain.length}${suffix}`;
+
+        let mainName = alkaneNames[mainChain.length]
+            ? alkaneNames[mainChain.length].replace('ano', suffix)
+            : `${mainChain.length}${suffix}`;
+
+        // Manejo de posiciones de insaturaciones (dobles o triples enlaces)
         if (suffix === 'eno' || suffix === 'ino') {
             const unsatPositions = [];
             connections.forEach(c => {
-                if ((suffix === 'eno' && c.type === 'double') || (suffix === 'ino' && c.type === 'triple')) {
+                if (
+                    (suffix === 'eno' && c.type === 'double') ||
+                    (suffix === 'ino' && c.type === 'triple')
+                ) {
                     const iIdx = mainChain.indexOf(c.i);
                     const jIdx = mainChain.indexOf(c.j);
                     if (iIdx !== -1 && jIdx !== -1) {
@@ -376,6 +464,7 @@ function getBranchedAlkaneName(atoms, carbons, connections, carbonIndices, mainC
                     }
                 }
             });
+
             unsatPositions.sort((a, b) => a - b);
             if (unsatPositions.length > 0) {
                 const posStr = unsatPositions.join(',');
@@ -383,9 +472,11 @@ function getBranchedAlkaneName(atoms, carbons, connections, carbonIndices, mainC
                 mainName = mainName.replace(suffix, `-${posStr}-${suffixLetter}o`);
             }
         }
+
         return substituentStr ? `${substituentStr} ${mainName}` : mainName;
     }
 }
+
 
 function isConnected(carbons, connections) {
     if (!Array.isArray(carbons) || !Array.isArray(connections)) return false;
