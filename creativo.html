@@ -1,50 +1,60 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Creativo - Química</title>
-    <link rel="stylesheet" href="css/diseño.css">
+    <link rel="stylesheet" href="css/style.css">
 </head>
+
 <body>
-    <header>
-        <button onclick="window.location.href='index.html'">Inicio</button>
-        <button id="toggle-sidebar">Elementos</button>
-    </header>
-    <main>
-        <div id="center-area" class="drop-zone">
-            <div id="viewport">
-                <div id="world">
-                    <svg id="lines-svg" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;"></svg>
+    <div class="screen active">
+        <header class="game-header">
+            <div class="header-left">
+                <button class="btn-quit" onclick="window.location.href='index.html'">Inicio</button>
+                <button id="toggle-sidebar" class="btn-toggle-sidebar">Elementos</button>
+            </div>
+            <div class="molecule-name" id="element-name" style="font-size: 1.2rem; padding: 0.5rem;">
+                Dale al boton de validar para descubrir el elemento creado
+            </div>
+        </header>
+
+        <main class="game-main">
+            <div id="center-area" class="drop-zone">
+                <div id="viewport">
+                    <div id="world">
+                        <svg id="lines-svg"
+                            style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;"></svg>
+                    </div>
                 </div>
             </div>
-        </div>
-        <aside id="sidebar">
-            <div class="elements-list">
-                <div class="element" data-element="H">H (Hidrógeno)</div>
-                <div class="element" data-element="C">C (Carbono)</div>
-                <div class="element" data-element="O">O (Oxígeno)</div>
-                <div class="element" data-element="S">S (Azufre)</div>
-                <div class="element" data-element="N">N (Nitrógeno)</div>
-                <div class="element" data-element="I">I (Yodo)</div>
+            <aside id="sidebar">
+                <div class="elements-list">
+                    <div class="element" data-element="H">H (Hidrógeno)</div>
+                    <div class="element" data-element="C">C (Carbono)</div>
+                    <div class="element" data-element="O">O (Oxígeno)</div>
+                    <div class="element" data-element="S">S (Azufre)</div>
+                    <div class="element" data-element="N">N (Nitrógeno)</div>
+                    <div class="element" data-element="I">I (Yodo)</div>
+                </div>
+            </aside>
+        </main>
+
+        <footer class="game-footer">
+            <div class="buttons">
+                <button class="btn-clear">Limpiar</button>
+                <button id="validar" class="btn-validate">Validar</button>
             </div>
-        </aside>
-    </main>
+        </footer>
+    </div>
+
     <div id="error-modal" class="modal">
         <div class="modal-content">
             <span class="close">&times;</span>
             <p id="error-message"></p>
         </div>
     </div>
-    <footer>
-        <div class="buttons">
-            <button>Limpiar</button>
-            <button id="validar" style="background-color: green; color: white;">Validar</button>
-        </div>
-        <div class="name-display">
-            <span id="element-name">Dale al boton de validar para descubrir el elemento creado</span>
-        </div>
-    </footer>
     <script src="javascript/pantalla.js"></script>
     <script src="javascript/constantes.js"></script>
     <script src="javascript/elementos.js"></script>
@@ -55,4 +65,5 @@
     <script src="javascript/mobile.js"></script>
     <script src="javascript/nomenclatura2.js"></script>
 </body>
+
 </html>

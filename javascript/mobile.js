@@ -7,7 +7,11 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('click', (e) => {
         const sidebar = document.getElementById('sidebar');
         const toggleButton = document.getElementById('toggle-sidebar');
-        if (window.innerWidth <= 768 && !sidebar.contains(e.target) && e.target !== toggleButton && !toggleButton.contains(e.target)) {
+        if (window.innerWidth <= 768 && sidebar && !sidebar.contains(e.target)) {
+            // Only check toggleButton if it exists
+            if (toggleButton && (e.target === toggleButton || toggleButton.contains(e.target))) {
+                return;
+            }
             sidebar.classList.add('hidden');
         }
     });

@@ -3,7 +3,7 @@ let viewport;
 let world;
 let linesSvg;
 
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     const toggleButton = document.getElementById('toggle-sidebar');
     const sidebar = document.getElementById('sidebar');
     centerArea = document.getElementById('center-area');
@@ -19,19 +19,21 @@ document.addEventListener('DOMContentLoaded', function() {
     panY = -1000 + viewportHeight / 2;
     updateWorldTransform();
 
-    toggleButton.addEventListener('click', function() {
-        sidebar.classList.toggle('hidden');
-    });
+    if (toggleButton) {
+        toggleButton.addEventListener('click', function () {
+            sidebar.classList.toggle('hidden');
+        });
+    }
 
-    viewport.addEventListener('wheel', function(e) {
+    viewport.addEventListener('wheel', function (e) {
         e.preventDefault();
         const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
         zoom *= zoomFactor;
-        zoom = Math.max(0.1, Math.min(5, zoom)); 
+        zoom = Math.max(0.1, Math.min(5, zoom));
         updateWorldTransform();
     });
 
-    viewport.addEventListener('mousedown', function(e) {
+    viewport.addEventListener('mousedown', function (e) {
         if (e.button === 0 && !draggedElement) {
             isPanning = true;
             lastPanX = e.clientX;
@@ -40,7 +42,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    document.addEventListener('mousemove', function(e) {
+    document.addEventListener('mousemove', function (e) {
         if (isPanning) {
             panX += e.clientX - lastPanX;
             panY += e.clientY - lastPanY;
@@ -50,7 +52,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    document.addEventListener('mouseup', function() {
+    document.addEventListener('mouseup', function () {
         if (isPanning) {
             isPanning = false;
             viewport.style.cursor = 'grab';
@@ -58,8 +60,8 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
 
-    viewport.addEventListener('touchstart', function(e) {
-        if (draggedElement) return; 
+    viewport.addEventListener('touchstart', function (e) {
+        if (draggedElement) return;
         if (e.touches.length === 1) {
 
             isPanning = true;
@@ -75,7 +77,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }, { passive: false });
 
-    viewport.addEventListener('touchmove', function(e) {
+    viewport.addEventListener('touchmove', function (e) {
         if (draggedElement) return;
         if (e.touches.length === 1 && isPanning) {
 
@@ -97,7 +99,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }, { passive: false });
 
-    viewport.addEventListener('touchend', function(e) {
+    viewport.addEventListener('touchend', function (e) {
         if (isPanning && e.touches.length === 0) {
             isPanning = false;
         }

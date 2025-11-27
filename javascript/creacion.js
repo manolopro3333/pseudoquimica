@@ -5,11 +5,11 @@ function showErrorModal(message) {
     document.getElementById('error-modal').style.display = 'flex';
 }
 
-document.querySelector('.close').addEventListener('click', function() {
+document.querySelector('.close').addEventListener('click', function () {
     document.getElementById('error-modal').style.display = 'none';
 });
 
-window.addEventListener('click', function(event) {
+window.addEventListener('click', function (event) {
     const modal = document.getElementById('error-modal');
     if (event.target === modal) {
         modal.style.display = 'none';
@@ -17,15 +17,26 @@ window.addEventListener('click', function(event) {
 });
 
 elements.forEach(element => {
-    element.addEventListener('click', function(e) {
+    element.addEventListener('click', function (e) {
         const elementType = e.target.dataset.element;
         const size = elementType === 'H' ? HYDROGEN_SIZE : ELEMENT_SIZE;
         const newElement = document.createElement('div');
-        newElement.className = 'dragged-element';
+        newElement.className = 'atom';
         newElement.textContent = elementType;
         newElement.style.position = 'absolute';
         newElement.style.width = size + 'px';
         newElement.style.height = size + 'px';
+
+        // Apply element-specific color
+        const elementInfo = getElement(elementType);
+        if (elementInfo) {
+            newElement.style.backgroundColor = elementInfo.color;
+            // Set text color to white for dark backgrounds, black for light ones
+            if (elementType === 'C' || elementType === 'N' || elementType === 'I') {
+                newElement.style.color = 'white';
+            }
+        }
+
         world.appendChild(newElement);
 
         if (elementType === 'C' && atoms.filter(a => a.type === 'C').length >= MAX_CARBONS) {
@@ -40,14 +51,14 @@ elements.forEach(element => {
                 newElement.style.top = (centerY - size / 2) + 'px';
                 newElement.addEventListener('mousedown', startDrag);
                 newElement.addEventListener('touchstart', startDrag);
-                atoms.push({type: 'C', element: newElement});
-                newElement.addEventListener('dblclick', function() {
+                atoms.push({ type: 'C', element: newElement });
+                newElement.addEventListener('dblclick', function () {
                     const index = atoms.findIndex(a => a.element === newElement);
                     if (index > -1) {
                         atoms.splice(index, 1);
                         // Remove attached hydrogens
                         const attachedHAttachments = hydrogenAttachments.filter(a => a.cIndex === index);
-                        const attachedHIndices = attachedHAttachments.map(a => a.hIndex).sort((a,b) => b - a);
+                        const attachedHIndices = attachedHAttachments.map(a => a.hIndex).sort((a, b) => b - a);
                         attachedHIndices.forEach(hIdx => {
                             const hEl = hidrogenos[hIdx];
                             hidrogenos.splice(hIdx, 1);
@@ -82,14 +93,14 @@ elements.forEach(element => {
                 newElement.style.top = y + 'px';
                 newElement.addEventListener('mousedown', startDrag);
                 newElement.addEventListener('touchstart', startDrag);
-                atoms.push({type: 'C', element: newElement});
-                newElement.addEventListener('dblclick', function() {
+                atoms.push({ type: 'C', element: newElement });
+                newElement.addEventListener('dblclick', function () {
                     const index = atoms.findIndex(a => a.element === newElement);
                     if (index > -1) {
                         atoms.splice(index, 1);
                         // Remove attached hydrogens
                         const attachedHAttachments = hydrogenAttachments.filter(a => a.cIndex === index);
-                        const attachedHIndices = attachedHAttachments.map(a => a.hIndex).sort((a,b) => b - a);
+                        const attachedHIndices = attachedHAttachments.map(a => a.hIndex).sort((a, b) => b - a);
                         attachedHIndices.forEach(hIdx => {
                             const hEl = hidrogenos[hIdx];
                             hidrogenos.splice(hIdx, 1);
@@ -126,7 +137,7 @@ elements.forEach(element => {
             newElement.addEventListener('mousedown', startDrag);
             newElement.addEventListener('touchstart', startDrag);
             hidrogenos.push(newElement);
-            newElement.addEventListener('dblclick', function() {
+            newElement.addEventListener('dblclick', function () {
                 const index = hidrogenos.indexOf(newElement);
                 if (index > -1) {
                     hidrogenos.splice(index, 1);
@@ -149,8 +160,8 @@ elements.forEach(element => {
             newElement.style.top = y + 'px';
             newElement.addEventListener('mousedown', startDrag);
             newElement.addEventListener('touchstart', startDrag);
-            atoms.push({type: elementType, element: newElement});
-            newElement.addEventListener('dblclick', function() {
+            atoms.push({ type: elementType, element: newElement });
+            newElement.addEventListener('dblclick', function () {
                 const index = atoms.findIndex(a => a.element === newElement);
                 if (index > -1) {
                     atoms.splice(index, 1);
@@ -171,7 +182,7 @@ elements.forEach(element => {
     const validarBtn = document.getElementById('validar');
     const nameDisplay = document.getElementById('element-name');
 
-    validarBtn.addEventListener('click', function() {
+    validarBtn.addEventListener('click', function () {
         const isValid = validateAndAdjustHydrogens();
         if (!isValid) {
             showErrorModal('No es posible el elemento');
@@ -195,7 +206,7 @@ elements.forEach(element => {
 
     const limpiarBtn = document.querySelector('footer button:first-child');
 
-    limpiarBtn.addEventListener('click', function() {
+    limpiarBtn.addEventListener('click', function () {
         cleanNonMainElements();
     });
 

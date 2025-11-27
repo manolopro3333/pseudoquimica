@@ -1,0 +1,69 @@
+{
+  "facil": {
+    "elementos": [
+      "metano",
+      "etano",
+      "propano",
+      "butano",
+      "metanol",
+      "etanol",
+      "propanol",
+      "metanal",
+      "etanal",
+      "propanal",
+      "ácido metanoico",
+      "ácido etanoico",
+      "metanamina",
+      "etanamina"
+    ],
+    "tiempoSegundos": 45,
+    "numeroPreguntas": 10,
+    "descripcion": "Moléculas simples con cadenas cortas"
+  },
+  "normal": {
+    "elementos": [
+      "pentano",
+      "hexano",
+      "2-metilbutano",
+      "2-metilpentano",
+      "3-metilpentano",
+      "butanol",
+      "pentanol",
+      "butan-2-ol",
+      "butanal",
+      "pentanal",
+      "ácido propanoico",
+      "ácido butanoico",
+      "propan-2-ol",
+      "butanamina",
+      "pentan-2-ona",
+      "butanona",
+      "2,2-dimetilpropano"
+    ],
+    "tiempoSegundos": 60,
+    "numeroPreguntas": 10,
+    "descripcion": "Moléculas con ramificaciones simples y grupos funcionales variados"
+  },
+  "dificil": {
+    "elementos": [
+      "2,3-dimetilpentano",
+      "2,2,4-trimetilpentano",
+      "3-etil-2-metilhexano",
+      "2-metilheptan-3-ol",
+      "3-etilpentan-2-ona",
+      "ácido 2-metilbutanoico",
+      "2,3-dimetilbutan-2-ol",
+      "3-etil-2-metilhexanal",
+      "4-etil-2,3-dimetilheptano",
+      "2,2,3-trimetilbutano",
+      "3-etil-2,4-dimetilhexano",
+      "2-metilpropan-2-amina",
+      "3-metilpentan-2-ona",
+      "2-etilbutan-1-ol",
+      "4-metilhexan-3-ona"
+    ],
+    "tiempoSegundos": 90,
+    "numeroPreguntas": 10,
+    "descripcion": "Moléculas complejas con múltiples ramificaciones y grupos funcionales"
+  }
+}

@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modo Práctica - Química</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+    <div id="menu-screen" class="screen active">
+        <div class="menu-container">
+            <h1 class="neon-title">⚗️ MODO PRÁCTICA ⚗️</h1>
+            <p class="subtitle">¡Pon a prueba tus conocimientos de química orgánica!</p>
+
+            <div class="difficulty-selector">
+                <h2>Selecciona la Dificultad</h2>
+                <div class="difficulty-cards">
+                    <div class="difficulty-card" data-difficulty="facil">
+                        <div class="card-header easy">
+                            <h3>🌱 FÁCIL</h3>
+                        </div>
+                        <div class="card-body">
+                            <p class="time-info">⏱️ 45 segundos</p>
+                            <p class="description">Moléculas simples con cadenas cortas</p>
+                        </div>
+                    </div>
+
+                    <div class="difficulty-card selected" data-difficulty="normal">
+                        <div class="card-header normal">
+                            <h3>⚡ NORMAL</h3>
+                        </div>
+                        <div class="card-body">
+                            <p class="time-info">⏱️ 60 segundos</p>
+                            <p class="description">Moléculas con ramificaciones simples</p>
+                        </div>
+                    </div>
+
+                    <div class="difficulty-card" data-difficulty="dificil">
+                        <div class="card-header hard">
+                            <h3>🔥 DIFÍCIL</h3>
+                        </div>
+                        <div class="card-body">
+                            <p class="time-info">⏱️ 90 segundos</p>
+                            <p class="description">Moléculas complejas con múltiples ramificaciones</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="menu-buttons">
+                <button class="btn-start">COMENZAR JUEGO</button>
+                <button class="btn-back" onclick="window.location.href='index.html'">VOLVER AL INICIO</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="countdown-screen" class="screen">
+        <div class="countdown-container">
+            <h2>¡Prepárate!</h2>
+            <div class="countdown-number">3</div>
+        </div>
+    </div>
+
+    <div id="game-screen" class="screen">
+        <header class="game-header">
+            <div class="header-left">
+                <button id="toggle-sidebar" class="btn-toggle-sidebar">☰ Elementos</button>
+                <button class="btn-quit">❌ Abandonar</button>
+            </div>
+            <div class="progress-info">
+                <span class="question-counter">Pregunta: <span id="current-question">1</span>/10</span>
+                <div class="timer-container">
+                    <div class="timer-bar">
+                        <div class="timer-fill"></div>
+                    </div>
+                    <span class="timer-text">⏱️ <span id="timer">60</span>s</span>
+                </div>
+            </div>
+            <div class="score">Puntos: <span id="score">0</span></div>
+        </header>
+
+        <div class="challenge-area">
+            <div class="target-molecule">
+                <h2>Crea esta molécula:</h2>
+                <div class="molecule-name" id="target-name">Metano</div>
+            </div>
+        </div>
+
+        <main class="game-main">
+            <div id="center-area" class="drop-zone">
+                <div id="viewport">
+                    <div id="world">
+                        <svg id="lines-svg"
+                            style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;"></svg>
+                    </div>
+                </div>
+            </div>
+            <aside id="sidebar">
+                <div class="elements-list">
+                    <div class="element" data-element="H">H (Hidrógeno)</div>
+                    <div class="element" data-element="C">C (Carbono)</div>
+                    <div class="element" data-element="O">O (Oxígeno)</div>
+                    <div class="element" data-element="S">S (Azufre)</div>
+                    <div class="element" data-element="N">N (Nitrógeno)</div>
+                    <div class="element" data-element="I">I (Yodo)</div>
+                </div>
+            </aside>
+        </main>
+
+        <footer class="game-footer">
+            <div class="buttons">
+                <button class="btn-clear">🗑️ Limpiar</button>
+                <button id="validar" class="btn-validate">✅ Validar Respuesta</button>
+            </div>
+        </footer>
+    </div>
+
+    <div id="results-screen" class="screen">
+        <div class="results-container">
+            <h1 class="results-title">¡Juego Terminado!</h1>
+            <div class="final-score">
+                <div class="score-circle">
+                    <span class="score-number" id="final-score">0</span>
+                    <span class="score-label">/ 1000</span>
+                </div>
+            </div>
+            <div class="results-details">
+                <div class="stat">
+                    <span class="stat-label">✅ Correctas:</span>
+                    <span class="stat-value" id="correct-answers">0</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">❌ Incorrectas:</span>
+                    <span class="stat-value" id="wrong-answers">0</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">⏱️ Tiempo promedio:</span>
+                    <span class="stat-value" id="avg-time">0s</span>
+                </div>
+            </div>
+            <div class="results-buttons">
+                <button class="btn-restart">🔄 JUGAR DE NUEVO</button>
+                <button class="btn-menu" onclick="window.location.reload()">📋 MENÚ PRINCIPAL</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="error-modal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <p id="error-message"></p>
+        </div>
+    </div>
+
+    <script src="javascript/pantalla.js"></script>
+    <script src="javascript/constantes.js"></script>
+    <script src="javascript/elementos.js"></script>
+    <script src="javascript/enlaces.js"></script>
+    <script src="javascript/arrastrar.js"></script>
+
+    <script src="javascript/nomenclatura.js"></script>
+    <script src="javascript/mobile.js"></script>
+    <script src="javascript/nomenclatura2.js"></script>
+    <script src="javascript/practica.js"></script>
+</body>
+
+</html>
